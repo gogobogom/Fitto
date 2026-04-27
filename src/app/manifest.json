@@ -1,0 +1,82 @@
+{
+  "name": "Fitto - AI Nutrition Coach",
+  "short_name": "Fitto",
+  "description": "Your personal AI-powered nutrition and fitness coach with meal tracking, workout logging, and intelligent health insights",
+  "start_url": "/",
+  "id": "/",
+  "display": "standalone",
+  "display_override": ["standalone", "minimal-ui"],
+  "background_color": "#ffffff",
+  "theme_color": "#14b8a6",
+  "orientation": "portrait-primary",
+  "scope": "/",
+  "lang": "tr",
+  "dir": "ltr",
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "categories": ["health", "fitness", "lifestyle", "food"],
+  "screenshots": [
+    {
+      "src": "/screenshot-1.png",
+      "sizes": "540x720",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "Dashboard"
+    }
+  ],
+  "prefer_related_applications": false,
+  "shortcuts": [
+    {
+      "name": "Yemek Ekle",
+      "short_name": "Yemek",
+      "description": "Hızlı yemek kaydı",
+      "url": "/?action=log-meal",
+      "icons": [{ "src": "/icon-meal.png", "sizes": "96x96" }]
+    },
+    {
+      "name": "AI Coach",
+      "short_name": "Coach",
+      "description": "AI beslenme koçu ile sohbet",
+      "url": "/?action=ai-coach",
+      "icons": [{ "src": "/icon-ai.png", "sizes": "96x96" }]
+    },
+    {
+      "name": "Su Takibi",
+      "short_name": "Su",
+      "description": "Su tüketimini kaydet",
+      "url": "/hydration",
+      "icons": [{ "src": "/icon-water.png", "sizes": "96x96" }]
+    }
+  ],
+  "handle_links": "preferred",
+  "launch_handler": {
+    "client_mode": ["navigate-existing", "auto"]
+  },
+  "edge_side_panel": {
+    "preferred_width": 400
+  }
+}

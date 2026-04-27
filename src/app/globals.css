@@ -1,0 +1,610 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+  
+  /* Doodle Style Utilities */
+  .doodle-border {
+    border: 3px solid currentColor;
+    border-radius: 255px 15px 225px 15px/15px 225px 15px 255px;
+    transition: all 0.3s ease;
+  }
+  
+  .doodle-border:hover {
+    border-radius: 15px 255px 15px 225px/225px 15px 255px 15px;
+  }
+  
+  .doodle-card {
+    border: 3px solid #000;
+    border-radius: 30px 20px 25px 30px/20px 30px 25px 20px;
+    box-shadow: 4px 4px 0px rgba(0,0,0,0.15);
+    transition: all 0.3s ease;
+  }
+  
+  .doodle-card:hover {
+    transform: translateY(-2px) rotate(-1deg);
+    box-shadow: 6px 6px 0px rgba(0,0,0,0.2);
+  }
+  
+  .doodle-button {
+    border: 2.5px solid #000;
+    border-radius: 50px 45px 48px 50px/48px 50px 45px 47px;
+    box-shadow: 3px 3px 0px rgba(0,0,0,0.2);
+    transition: all 0.2s ease;
+  }
+  
+  .doodle-button:hover {
+    transform: translateY(-2px) rotate(1deg);
+    box-shadow: 4px 4px 0px rgba(0,0,0,0.25);
+  }
+  
+  .doodle-button:active {
+    transform: translateY(1px) rotate(-1deg);
+    box-shadow: 2px 2px 0px rgba(0,0,0,0.15);
+  }
+  
+  .wiggle {
+    animation: wiggle 2.5s ease-in-out infinite;
+  }
+  
+  .bounce-soft {
+    animation: bounceSoft 2s ease-in-out infinite;
+  }
+  
+  .rotate-tilt {
+    animation: rotateTilt 4s ease-in-out infinite;
+  }
+  
+  .animate-bounce-gentle {
+    animation: bounceGentle 2s ease-in-out infinite;
+  }
+  
+  /* Enhanced Animations */
+  .fade-in {
+    animation: fadeIn 0.5s ease-out;
+  }
+  
+  .fade-in-up {
+    animation: fadeInUp 0.6s ease-out;
+  }
+  
+  .fade-in-down {
+    animation: fadeInDown 0.6s ease-out;
+  }
+  
+  .slide-in-right {
+    animation: slideInRight 0.4s ease-out;
+  }
+  
+  .slide-in-left {
+    animation: slideInLeft 0.4s ease-out;
+  }
+  
+  .scale-in {
+    animation: scaleIn 0.3s ease-out;
+  }
+  
+  .stagger-1 {
+    animation-delay: 0.1s;
+  }
+  
+  .stagger-2 {
+    animation-delay: 0.2s;
+  }
+  
+  .stagger-3 {
+    animation-delay: 0.3s;
+  }
+  
+  .stagger-4 {
+    animation-delay: 0.4s;
+  }
+  
+  /* Smooth transitions for interactive elements */
+  .smooth-transition {
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  
+  .smooth-hover:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 20px -5px rgba(0, 0, 0, 0.15);
+  }
+  
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+  
+  @keyframes fadeInUp {
+    from {
+      opacity: 0;
+      transform: translateY(20px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+  
+  @keyframes fadeInDown {
+    from {
+      opacity: 0;
+      transform: translateY(-20px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+  
+  @keyframes slideInRight {
+    from {
+      opacity: 0;
+      transform: translateX(30px);
+    }
+    to {
+      opacity: 1;
+      transform: translateX(0);
+    }
+  }
+  
+  @keyframes slideInLeft {
+    from {
+      opacity: 0;
+      transform: translateX(-30px);
+    }
+    to {
+      opacity: 1;
+      transform: translateX(0);
+    }
+  }
+  
+  @keyframes scaleIn {
+    from {
+      opacity: 0;
+      transform: scale(0.9);
+    }
+    to {
+      opacity: 1;
+      transform: scale(1);
+    }
+  }
+  
+  @keyframes wiggle {
+    0%, 100% { transform: rotate(-1deg); }
+    50% { transform: rotate(1deg); }
+  }
+  
+  @keyframes bounceSoft {
+    0%, 100% { transform: translateY(0px); }
+    50% { transform: translateY(-8px); }
+  }
+  
+  @keyframes rotateTilt {
+    0%, 100% { transform: rotate(0deg); }
+    25% { transform: rotate(-2deg); }
+    75% { transform: rotate(2deg); }
+  }
+  
+  @keyframes bounceGentle {
+    0%, 100% { 
+      transform: translateY(0px); 
+      animation-timing-function: ease-in-out;
+    }
+    50% { 
+      transform: translateY(-12px); 
+      animation-timing-function: ease-in-out;
+    }
+  }
+  
+  .font-doodle {
+    font-family: var(--font-caveat), cursive;
+  }
+  
+  .font-doodle-alt {
+    font-family: var(--font-architects), cursive;
+  }
+  
+  /* Safe area support for mobile devices */
+  .safe-top {
+    padding-top: env(safe-area-inset-top);
+  }
+  
+  .safe-bottom {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  
+  .safe-left {
+    padding-left: env(safe-area-inset-left);
+  }
+  
+  .safe-right {
+    padding-right: env(safe-area-inset-right);
+  }
+  
+  /* Prevent horizontal scroll on mobile */
+  .mobile-container {
+    @apply overflow-x-hidden;
+    -webkit-overflow-scrolling: touch;
+  }
+  
+  /* Smooth scrolling for all devices */
+  * {
+    -webkit-overflow-scrolling: touch;
+  }
+  
+  /* Dark Mode Enhancements */
+  .dark .card-glow {
+    box-shadow: 0 0 20px rgba(24, 100, 171, 0.15);
+  }
+  
+  .dark .card-glow:hover {
+    box-shadow: 0 0 30px rgba(24, 100, 171, 0.25);
+  }
+  
+  .dark .text-glow {
+    text-shadow: 0 0 10px rgba(24, 100, 171, 0.3);
+  }
+  
+  .dark .border-glow {
+    border-color: rgba(24, 100, 171, 0.3);
+    box-shadow: 0 0 10px rgba(24, 100, 171, 0.2);
+  }
+  
+  .dark .bg-elevated {
+    background: linear-gradient(135deg, rgba(217, 133, 117, 0.05) 0%, rgba(24, 100, 171, 0.05) 100%);
+  }
+  
+  .dark .smooth-hover:hover {
+    box-shadow: 0 10px 30px -5px rgba(24, 100, 171, 0.3);
+  }
+  
+  /* Better dark mode borders for doodle style */
+  .dark .doodle-card {
+    border-color: rgba(24, 100, 171, 0.4);
+    box-shadow: 4px 4px 0px rgba(24, 100, 171, 0.2);
+  }
+  
+  .dark .doodle-card:hover {
+    box-shadow: 6px 6px 0px rgba(24, 100, 171, 0.3);
+  }
+  
+  .dark .doodle-button {
+    border-color: rgba(24, 100, 171, 0.5);
+    box-shadow: 3px 3px 0px rgba(24, 100, 171, 0.25);
+  }
+  
+  .dark .doodle-button:hover {
+    box-shadow: 4px 4px 0px rgba(24, 100, 171, 0.35);
+  }
+  
+  /* Improved scrollbar for dark mode */
+  .dark ::-webkit-scrollbar {
+    width: 12px;
+    height: 12px;
+  }
+  
+  .dark ::-webkit-scrollbar-track {
+    background: rgba(217, 133, 117, 0.1);
+    border-radius: 10px;
+  }
+  
+  .dark ::-webkit-scrollbar-thumb {
+    background: rgba(24, 100, 171, 0.5);
+    border-radius: 10px;
+  }
+  
+  .dark ::-webkit-scrollbar-thumb:hover {
+    background: rgba(24, 100, 171, 0.7);
+  }
+  
+  /* Micro-interaction Animations */
+  .animate-ripple {
+    animation: ripple 0.6s linear;
+  }
+  
+  .animate-bounce-once {
+    animation: bounceOnce 0.3s ease-out;
+  }
+  
+  .animate-shake {
+    animation: shake 0.5s cubic-bezier(0.36, 0.07, 0.19, 0.97);
+  }
+  
+  .animate-success-pop {
+    animation: successPop 0.6s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+  }
+  
+  .animate-draw-check {
+    animation: drawCheck 0.4s ease-out 0.2s forwards;
+    stroke-dasharray: 24;
+    stroke-dashoffset: 24;
+  }
+  
+  .animate-fade-in-up {
+    animation: fadeInUp 0.5s ease-out forwards;
+    opacity: 0;
+  }
+  
+  .animate-slide-in-left {
+    animation: slideInLeft 0.4s ease-out forwards;
+  }
+  
+  .animate-slide-in-right {
+    animation: slideInRight 0.4s ease-out forwards;
+  }
+  
+  .animate-pulse-scale {
+    animation: pulseScale 2s ease-in-out infinite;
+  }
+  
+  .animate-heartbeat {
+    animation: heartbeat 1.5s ease-in-out infinite;
+  }
+  
+  .animate-jello {
+    animation: jello 0.9s;
+  }
+  
+  .animate-rubber-band {
+    animation: rubberBand 0.8s;
+  }
+  
+  @keyframes ripple {
+    from {
+      transform: scale(1);
+      opacity: 0.4;
+    }
+    to {
+      transform: scale(20);
+      opacity: 0;
+    }
+  }
+  
+  @keyframes bounceOnce {
+    0% {
+      transform: scale(1);
+    }
+    50% {
+      transform: scale(1.15);
+    }
+    100% {
+      transform: scale(1);
+    }
+  }
+  
+  @keyframes shake {
+    0%, 100% {
+      transform: translateX(0);
+    }
+    10%, 30%, 50%, 70%, 90% {
+      transform: translateX(-4px);
+    }
+    20%, 40%, 60%, 80% {
+      transform: translateX(4px);
+    }
+  }
+  
+  @keyframes successPop {
+    0% {
+      transform: scale(0);
+      opacity: 0;
+    }
+    50% {
+      transform: scale(1.2);
+    }
+    100% {
+      transform: scale(1);
+      opacity: 1;
+    }
+  }
+  
+  @keyframes drawCheck {
+    to {
+      stroke-dashoffset: 0;
+    }
+  }
+  
+  @keyframes pulseScale {
+    0%, 100% {
+      transform: scale(1);
+    }
+    50% {
+      transform: scale(1.05);
+    }
+  }
+  
+  @keyframes heartbeat {
+    0%, 100% {
+      transform: scale(1);
+    }
+    14% {
+      transform: scale(1.1);
+    }
+    28% {
+      transform: scale(1);
+    }
+    42% {
+      transform: scale(1.1);
+    }
+    70% {
+      transform: scale(1);
+    }
+  }
+  
+  @keyframes jello {
+    0%, 100% {
+      transform: scale3d(1, 1, 1);
+    }
+    30% {
+      transform: scale3d(1.25, 0.75, 1);
+    }
+    40% {
+      transform: scale3d(0.75, 1.25, 1);
+    }
+    50% {
+      transform: scale3d(1.15, 0.85, 1);
+    }
+    65% {
+      transform: scale3d(0.95, 1.05, 1);
+    }
+    75% {
+      transform: scale3d(1.05, 0.95, 1);
+    }
+  }
+  
+  @keyframes rubberBand {
+    0% {
+      transform: scale3d(1, 1, 1);
+    }
+    30% {
+      transform: scale3d(1.25, 0.75, 1);
+    }
+    40% {
+      transform: scale3d(0.75, 1.25, 1);
+    }
+    50% {
+      transform: scale3d(1.15, 0.85, 1);
+    }
+    65% {
+      transform: scale3d(0.95, 1.05, 1);
+    }
+    75% {
+      transform: scale3d(1.05, 0.95, 1);
+    }
+    100% {
+      transform: scale3d(1, 1, 1);
+    }
+  }
+  
+  /* Touch feedback for mobile */
+  .touch-feedback {
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+  }
+  
+  .touch-feedback:active {
+    transform: scale(0.97);
+    opacity: 0.9;
+  }
+  
+  /* Reduced motion preference */
+  @media (prefers-reduced-motion: reduce) {
+    .animate-ripple,
+    .animate-bounce-once,
+    .animate-shake,
+    .animate-success-pop,
+    .animate-draw-check,
+    .animate-fade-in-up,
+    .animate-slide-in-left,
+    .animate-slide-in-right,
+    .animate-pulse-scale,
+    .animate-heartbeat,
+    .animate-jello,
+    .animate-rubber-band,
+    .wiggle,
+    .bounce-soft,
+    .rotate-tilt,
+    .animate-bounce-gentle {
+      animation: none !important;
+      transition: none !important;
+    }
+    
+    .touch-feedback:active {
+      transform: none;
+    }
+  }
+}
+
+
+
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 0 0% 3.9%;
+    --card: 0 0% 100%;
+    --card-foreground: 0 0% 3.9%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 0 0% 3.9%;
+    --primary: 24 100% 55%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 340 82% 52%;
+    --secondary-foreground: 0 0% 100%;
+    --muted: 24 20% 95%;
+    --muted-foreground: 0 0% 45.1%;
+    --accent: 24 100% 55%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 0 0% 89.8%;
+    --input: 0 0% 89.8%;
+    --ring: 24 100% 55%;
+    --chart-1: 24 100% 55%;
+    --chart-2: 340 82% 52%;
+    --chart-3: 45 93% 47%;
+    --chart-4: 330 81% 60%;
+    --chart-5: 15 86% 58%;
+    --radius: 1rem;
+    --sidebar-background: 0 0% 98%;
+    --sidebar-foreground: 240 5.3% 26.1%;
+    --sidebar-primary: 24 100% 55%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 24 20% 95%;
+    --sidebar-accent-foreground: 24 100% 55%;
+    --sidebar-border: 220 13% 91%;
+    --sidebar-ring: 24 100% 55%;
+  }
+  .dark {
+    --background: 222 47% 11%;
+    --foreground: 210 40% 98%;
+    --card: 222 47% 11%;
+    --card-foreground: 210 40% 98%;
+    --popover: 222 47% 11%;
+    --popover-foreground: 210 40% 98%;
+    --primary: 24 100% 55%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 217 33% 17%;
+    --secondary-foreground: 210 40% 98%;
+    --muted: 217 33% 17%;
+    --muted-foreground: 215 20% 65%;
+    --accent: 217 33% 17%;
+    --accent-foreground: 210 40% 98%;
+    --destructive: 0 62.8% 50.6%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 217 33% 20%;
+    --input: 217 33% 20%;
+    --ring: 24 100% 55%;
+    --chart-1: 24 100% 55%;
+    --chart-2: 340 82% 52%;
+    --chart-3: 45 93% 47%;
+    --chart-4: 330 81% 60%;
+    --chart-5: 15 86% 58%;
+    --sidebar-background: 222 47% 11%;
+    --sidebar-foreground: 210 40% 98%;
+    --sidebar-primary: 24 100% 55%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 217 33% 17%;
+    --sidebar-accent-foreground: 24 100% 55%;
+    --sidebar-border: 217 33% 20%;
+    --sidebar-ring: 24 100% 55%;
+  }
+}
+
+
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}

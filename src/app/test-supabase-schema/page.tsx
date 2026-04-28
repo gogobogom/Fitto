@@ -10,9 +10,22 @@ interface TableTest {
   name: string;
   exists: boolean;
   columns: string[];
-  sampleData: any;
+  sampleData: unknown;
   error: string | null;
 }
+
+const TABLES_TO_TEST: Array<{ name: string; userIdField?: string }> = [
+  { name: 'user_profiles', userIdField: 'user_id' },
+  { name: 'user_goals', userIdField: 'user_id' },
+  { name: 'meals', userIdField: 'user_id' },
+  { name: 'exercises', userIdField: 'user_id' },
+  { name: 'food_database' },
+  { name: 'daily_summaries', userIdField: 'user_id' },
+  { name: 'water_logs', userIdField: 'user_id' },
+  { name: 'body_measurements', userIdField: 'user_id' },
+  { name: 'subscriptions', userIdField: 'user_id' },
+  { name: 'trial_status', userIdField: 'user_id' },
+];
 
 export default function TestSupabaseSchema() {
   const [userId, setUserId] = useState<string | null>(null);
@@ -20,21 +33,23 @@ export default function TestSupabaseSchema() {
   const [results, setResults] = useState<TableTest[]>([]);
 
   useEffect(() => {
-    const checkAuth = async (): Promise<void> => {
-      const { data: { user } } = await supabase.auth.getUser();
-      setUserId(user?.id || null);
-    };
-    checkAuth();
+    void (async () => {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      setUserId(user?.id ?? null);
+    })();
   }, []);
 
-  const testTable = async (tableName: string, userIdField?: string): Promise<TableTest> => {
+  const testTable = async (
+    tableName: string,
+    userIdField?: string,
+  ): Promise<TableTest> => {
     try {
-      let query = supabase.from(tableName).select('*');
-      
-      if (userIdField && userId) {
-        query = query.eq(userIdField, userId);
-      }
-      
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let query = (supabase.from as any)(tableName).select('*');
+      if (userIdField && userId) query = query.eq(userIdField, userId);
+
       const { data, error } = await query.limit(1);
 
       if (error) {
@@ -43,12 +58,11 @@ export default function TestSupabaseSchema() {
           exists: false,
           columns: [],
           sampleData: null,
-          error: `${error.code}: ${error.message}`,
+          error: `${error.code ?? ''} ${error.message}`.trim(),
         };
       }
 
       const columns = data && data.length > 0 ? Object.keys(data[0]) : [];
-
       return {
         name: tableName,
         exists: true,
@@ -56,46 +70,26 @@ export default function TestSupabaseSchema() {
         sampleData: data && data.length > 0 ? data[0] : null,
         error: null,
       };
-    } catch (error) {
+    } catch (err) {
       return {
         name: tableName,
         exists: false,
         columns: [],
         sampleData: null,
-        error: error instanceof Error ? error.message : 'Unknown error',
+        error: err instanceof Error ? err.message : 'Unknown error',
       };
     }
   };
 
   const runTests = async (): Promise<void> => {
-    if (!userId) {
-      alert('Please login first!');
-      return;
-    }
-
     setTesting(true);
     setResults([]);
-
-    const tablesToTest = [
-      { name: 'profiles', userIdField: 'id' },
-      { name: 'user_goals', userIdField: 'id' },
-      { name: 'daily_summaries', userIdField: 'user_id' },
-      { name: 'daily_logs', userIdField: 'user_id' },
-      { name: 'food_items', userIdField: 'user_id' },
-      { name: 'exercise_logs', userIdField: 'user_id' },
-      { name: 'body_measurements', userIdField: 'user_id' },
-      { name: 'subscriptions', userIdField: 'identity' },
-      { name: 'trial_status', userIdField: 'identity' },
-    ];
-
-    const testResults: TableTest[] = [];
-
-    for (const table of tablesToTest) {
-      const result = await testTable(table.name, table.userIdField);
-      testResults.push(result);
+    const out: TableTest[] = [];
+    for (const t of TABLES_TO_TEST) {
+      // eslint-disable-next-line no-await-in-loop
+      out.push(await testTable(t.name, t.userIdField));
     }
-
-    setResults(testResults);
+    setResults(out);
     setTesting(false);
   };
 
@@ -107,43 +101,45 @@ export default function TestSupabaseSchema() {
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="space-y-2">
-            <p><strong>User ID:</strong> {userId || 'Not logged in'}</p>
-            <Button onClick={runTests} disabled={testing || !userId}>
-              {testing ? 'Testing...' : 'Run Schema Tests'}
+            <p>
+              <strong>User ID:</strong> {userId || 'Not logged in'}
+            </p>
+            <Button onClick={() => void runTests()} disabled={testing}>
+              {testing ? 'Testing…' : 'Run Schema Tests'}
             </Button>
           </div>
 
           {results.length > 0 && (
             <div className="space-y-4 mt-6">
               <h3 className="text-lg font-bold">Test Results:</h3>
-              {results.map((result, index) => (
-                <Card key={index} className={result.exists ? 'border-green-200' : 'border-red-200'}>
+              {results.map((r) => (
+                <Card key={r.name} className={r.exists ? 'border-green-200' : 'border-red-200'}>
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2 text-base">
-                      {result.exists ? (
+                      {r.exists ? (
                         <CheckCircle2 className="h-5 w-5 text-green-600" />
                       ) : (
                         <XCircle className="h-5 w-5 text-red-600" />
                       )}
-                      {result.name}
+                      {r.name}
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-2">
-                    {result.exists ? (
+                    {r.exists ? (
                       <>
-                        <div>
-                          <p className="font-semibold text-sm">Columns ({result.columns.length}):</p>
-                          <pre className="bg-gray-100 p-2 rounded text-xs overflow-x-auto">
-                            {JSON.stringify(result.columns, null, 2)}
-                          </pre>
-                        </div>
-                        {result.sampleData && (
-                          <div>
-                            <p className="font-semibold text-sm">Sample Data:</p>
+                        <p className="font-semibold text-sm">Columns ({r.columns.length}):</p>
+                        <pre className="bg-gray-100 p-2 rounded text-xs overflow-x-auto">
+                          {JSON.stringify(r.columns, null, 2)}
+                        </pre>
+                        {r.sampleData ? (
+                          <>
+                            <p className="font-semibold text-sm">Sample Row:</p>
                             <pre className="bg-gray-100 p-2 rounded text-xs overflow-x-auto max-h-40">
-                              {JSON.stringify(result.sampleData, null, 2)}
+                              {JSON.stringify(r.sampleData, null, 2)}
                             </pre>
-                          </div>
+                          </>
+                        ) : (
+                          <p className="text-xs text-muted-foreground">(empty table)</p>
                         )}
                       </>
                     ) : (
@@ -151,7 +147,7 @@ export default function TestSupabaseSchema() {
                         <AlertCircle className="h-5 w-5 text-red-600 flex-shrink-0 mt-0.5" />
                         <div>
                           <p className="font-semibold text-sm">Error:</p>
-                          <p className="text-sm text-red-600">{result.error}</p>
+                          <p className="text-sm text-red-600">{r.error}</p>
                         </div>
                       </div>
                     )}

@@ -46,15 +46,15 @@ export function DetailedReportCard({ userGoals, period }: DetailedReportCardProp
         const startDate = new Date(today);
         startDate.setDate(today.getDate() - daysToAnalyze);
 
-        // Fetch daily logs for the period
+        // Fetch meals for the period
         const { data: dailyLogs, error } = await supabase
-          .from('daily_logs')
+          .from('meals')
           .select('*')
           .gte('date', startDate.toISOString().split('T')[0])
           .lte('date', today.toISOString().split('T')[0]);
 
         if (error) {
-          console.error('Error fetching daily logs:', error);
+          console.error('Error fetching meals:', error);
           return;
         }
 
@@ -69,15 +69,15 @@ export function DetailedReportCard({ userGoals, period }: DetailedReportCardProp
           dailyData[dateKey] = { calories: 0, protein: 0, carbs: 0, fat: 0 };
         }
 
-        // Aggregate data from logs
+        // Aggregate data from meals
         if (dailyLogs) {
           for (const log of dailyLogs) {
-            const dateKey = log.date;
-            if (dateKey in dailyData) {
-              dailyData[dateKey].calories += log.calories || 0;
-              dailyData[dateKey].protein += log.protein || 0;
-              dailyData[dateKey].carbs += log.carbs || 0;
-              dailyData[dateKey].fat += log.fat || 0;
+            const dateKey = log.date as string;
+            if (dateKey && dateKey in dailyData) {
+              dailyData[dateKey].calories += Number(log.calories) || 0;
+              dailyData[dateKey].protein += Number(log.protein) || 0;
+              dailyData[dateKey].carbs += Number(log.carbs) || 0;
+              dailyData[dateKey].fat += Number(log.fats) || 0;
             }
           }
         }
@@ -153,21 +153,21 @@ export function DetailedReportCard({ userGoals, period }: DetailedReportCardProp
       {
         nutrientKey: 'profile.protein',
         current: nutritionAnalysis.avgProtein,
-        target: userGoals.daily_protein_target || 0,
+        target: userGoals.protein_target_g || 0,
         trend: 'stable',
         percentage: 0,
       },
       {
         nutrientKey: 'stats.carbs',
         current: nutritionAnalysis.avgCarbs,
-        target: userGoals.daily_carbs_target || 0,
+        target: userGoals.carbs_target_g || 0,
         trend: 'stable',
         percentage: 0,
       },
       {
         nutrientKey: 'profile.fat',
         current: nutritionAnalysis.avgFat,
-        target: userGoals.daily_fat_target || 0,
+        target: userGoals.fat_target_g || 0,
         trend: 'stable',
         percentage: 0,
       },

@@ -280,9 +280,41 @@ export function EnhancedDashboard({
     return total;
   }, [connection?.db?.foodItem, currentDate]);
 
+  // Calories burned today - prefer the server-aggregated daily_summaries value,
+  // but fall back to summing today's exercises client-side so the dashboard
+  // reflects activity even before the DB aggregation trigger runs.
+  const [todayBurned, setTodayBurned] = useState<number>(0);
+  useEffect(() => {
+    if (!currentDate || !connection?.userId) return;
+    let cancelled = false;
+    void (async () => {
+      const { data, error } = await connection.supabase
+        .from('exercises')
+        .select('calories_burned')
+        .eq('user_id', connection.userId)
+        .eq('date', currentDate);
+      if (cancelled) return;
+      if (error) {
+        // Column may not exist on old schema; treat as zero rather than crashing
+        setTodayBurned(0);
+        return;
+      }
+      const sum = (data ?? []).reduce(
+        (acc: number, row: { calories_burned: number | null }) =>
+          acc + (Number(row.calories_burned) || 0),
+        0,
+      );
+      setTodayBurned(sum);
+      if (sum > 0) simpleStorage.setItem(`exercise_${currentDate}`, sum.toString());
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [connection?.userId, connection?.supabase, currentDate]);
+
   // Stable calculations
   const targetCalories = userGoals?.daily_calorie_target || 2000;
-  const caloriesBurned = dailySummary?.exercise_calories || 0;
+  const caloriesBurned = (dailySummary?.exercise_calories ?? 0) || todayBurned;
   const netCalories = caloriesConsumed - caloriesBurned;
   const calorieProgress = (netCalories / targetCalories) * 100;
 

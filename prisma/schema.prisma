@@ -1,15 +1,214 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+// =============================================================================
+// Fitto - Prisma Schema (aligned with /app/migration.sql)
+// =============================================================================
+// • Mirrors the canonical Supabase tables (user_profiles, user_goals, meals,
+//   exercises, food_database, daily_summaries, water_logs, body_measurements,
+//   ai_messages, subscriptions, trial_status).
+// • All relations on user_id are declared as @db.Uuid and reference auth.users
+//   *implicitly* — Prisma cannot model auth.users (managed by Supabase), so we
+//   use @db.Uuid scalar foreign keys without a Prisma relation back to auth.
+// • Run `npx prisma generate` after editing.
+// =============================================================================
 
 generator client {
-  provider = "prisma-client-js"
+  provider      = "prisma-client-js"
   binaryTargets = ["native", "debian-openssl-3.0.x", "rhel-openssl-3.0.x"]
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// -------------------- Profiles & Goals --------------------
+
+model UserProfile {
+  id            String   @id @default(uuid()) @db.Uuid
+  userId        String   @unique @map("user_id") @db.Uuid
+  fullName      String?  @map("full_name")
+  username      String?
+  email         String?
+  age           Int?
+  weightKg      Decimal? @map("weight_kg") @db.Decimal(5, 2)
+  heightCm      Decimal? @map("height_cm") @db.Decimal(5, 2)
+  gender        String?
+  activityLevel String?  @map("activity_level")
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@index([userId])
+  @@map("user_profiles")
+}
+
+model UserGoals {
+  id                 String   @id @default(uuid()) @db.Uuid
+  userId             String   @unique @map("user_id") @db.Uuid
+  goalType           String?  @map("goal_type")
+  targetWeightKg     Decimal? @map("target_weight_kg") @db.Decimal(5, 2)
+  dailyCalorieTarget Int?     @map("daily_calorie_target")
+  proteinTargetG     Decimal? @map("protein_target_g") @db.Decimal(8, 2)
+  carbsTargetG       Decimal? @map("carbs_target_g") @db.Decimal(8, 2)
+  fatTargetG         Decimal? @map("fat_target_g") @db.Decimal(8, 2)
+  createdAt          DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt          DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@index([userId])
+  @@map("user_goals")
+}
+
+// -------------------- Logging --------------------
+
+model Meal {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  mealName  String   @map("meal_name")
+  mealType  String?  @map("meal_type")
+  calories  Decimal  @default(0) @db.Decimal(8, 2)
+  protein   Decimal  @default(0) @db.Decimal(8, 2)
+  carbs     Decimal  @default(0) @db.Decimal(8, 2)
+  fats      Decimal  @default(0) @db.Decimal(8, 2)
+  notes     String?
+  date      DateTime @default(now()) @db.Date
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@index([userId, date])
+  @@index([userId])
+  @@map("meals")
+}
+
+model Exercise {
+  id              String   @id @default(uuid()) @db.Uuid
+  userId          String   @map("user_id") @db.Uuid
+  exerciseName    String   @map("exercise_name")
+  sets            Int?
+  reps            Int?
+  weight          Decimal? @db.Decimal(8, 2)
+  durationMinutes Int?     @map("duration_minutes")
+  caloriesBurned  Decimal? @map("calories_burned") @db.Decimal(8, 2)
+  notes           String?
+  date            DateTime @default(now()) @db.Date
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@index([userId, date])
+  @@map("exercises")
+}
+
+// -------------------- Food Database --------------------
+
+model FoodDatabase {
+  id             String   @id @default(uuid()) @db.Uuid
+  name           String
+  nameTr         String   @map("name_tr")
+  calories       Decimal  @db.Decimal(8, 2)
+  protein        Decimal  @default(0) @db.Decimal(8, 2)
+  carbs          Decimal  @default(0) @db.Decimal(8, 2)
+  fats           Decimal  @default(0) @db.Decimal(8, 2)
+  fiber          Decimal  @default(0) @db.Decimal(8, 2)
+  category       String   @default("general")
+  categoryTr     String   @default("genel") @map("category_tr")
+  servingSize    String   @default("100g") @map("serving_size")
+  servingSizeTr  String   @default("100g") @map("serving_size_tr")
+  barcode        String?
+  isCustom       Boolean  @default(false) @map("is_custom")
+  createdBy      String?  @map("created_by") @db.Uuid
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@map("food_database")
+}
+
+// -------------------- Aggregations --------------------
+
+model DailySummary {
+  id               String   @id @default(uuid()) @db.Uuid
+  userId           String   @map("user_id") @db.Uuid
+  date             DateTime @db.Date
+  totalCalories    Decimal  @default(0) @map("total_calories") @db.Decimal(8, 2)
+  totalProtein     Decimal  @default(0) @map("total_protein") @db.Decimal(8, 2)
+  totalCarbs       Decimal  @default(0) @map("total_carbs") @db.Decimal(8, 2)
+  totalFats        Decimal  @default(0) @map("total_fats") @db.Decimal(8, 2)
+  totalWaterMl     Int      @default(0) @map("total_water_ml")
+  mealsLogged      Int      @default(0) @map("meals_logged")
+  exercisesLogged  Int      @default(0) @map("exercises_logged")
+  exerciseCalories Decimal  @default(0) @map("exercise_calories") @db.Decimal(8, 2)
+  notes            String?
+  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@unique([userId, date])
+  @@index([userId, date])
+  @@map("daily_summaries")
+}
+
+model WaterLog {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  date      DateTime @default(now()) @db.Date
+  glasses   Int      @default(0)
+  ml        Int      @default(0)
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@unique([userId, date])
+  @@map("water_logs")
+}
+
+model BodyMeasurement {
+  id                  String   @id @default(uuid()) @db.Uuid
+  userId              String   @map("user_id") @db.Uuid
+  date                DateTime @default(now()) @db.Date
+  weight              Decimal  @db.Decimal(5, 2)
+  bodyFatPercentage   Decimal? @map("body_fat_percentage") @db.Decimal(4, 2)
+  muscleMass          Decimal? @map("muscle_mass") @db.Decimal(5, 2)
+  waist               Decimal? @db.Decimal(5, 2)
+  hips                Decimal? @db.Decimal(5, 2)
+  chest               Decimal? @db.Decimal(5, 2)
+  arms                Decimal? @db.Decimal(5, 2)
+  legs                Decimal? @db.Decimal(5, 2)
+  notes               String?
+  createdAt           DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@index([userId, date])
+  @@map("body_measurements")
+}
+
+// -------------------- AI / Subscription --------------------
+
+model AIMessage {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  role      String
+  content   String
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@index([userId])
+  @@map("ai_messages")
+}
+
+model Subscription {
+  userId           String    @id @map("user_id") @db.Uuid
+  planType         String    @default("free") @map("plan_type")
+  status           String    @default("active")
+  startedAt        DateTime  @default(now()) @map("started_at") @db.Timestamptz(6)
+  expiresAt        DateTime? @map("expires_at") @db.Timestamptz(6)
+  autoRenew        Boolean   @default(false) @map("auto_renew")
+  aiRequestsUsed   Int       @default(0) @map("ai_requests_used")
+  aiRequestsLimit  Int       @default(10) @map("ai_requests_limit")
+  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@map("subscriptions")
+}
+
+model TrialStatus {
+  userId           String    @id @map("user_id") @db.Uuid
+  isTrialActive    Boolean   @default(false) @map("is_trial_active")
+  trialStartedAt   DateTime? @map("trial_started_at") @db.Timestamptz(6)
+  trialEndsAt      DateTime? @map("trial_ends_at") @db.Timestamptz(6)
+  dailyTrialCount  Int       @default(0) @map("daily_trial_count")
+  trialLimit       Int       @default(3) @map("trial_limit")
+  lastReset        DateTime  @default(now()) @map("last_reset") @db.Timestamptz(6)
+  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@map("trial_status")
 }

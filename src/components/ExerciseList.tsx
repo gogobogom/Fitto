@@ -1,13 +1,11 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Button } from './ui/button';
 import { X, Activity } from 'lucide-react';
-import { useSupabase } from '@/hooks/useSupabase';
-import type { Database } from '@/types/supabase';
-
-type ExerciseLog = Database['public']['Tables']['exercise_logs']['Row'];
+import { supabase } from '@/lib/supabase/client';
+import type { ExerciseLog } from '@/types/supabase';
 
 interface ExerciseListProps {
   currentDate: Date;
@@ -15,83 +13,68 @@ interface ExerciseListProps {
 }
 
 export function ExerciseList({ currentDate, onExercisesChange }: ExerciseListProps) {
-  const { supabase } = useSupabase();
   const [exercises, setExercises] = useState<ExerciseLog[]>([]);
 
+  const loadExercises = useCallback(async () => {
+    try {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) {
+        setExercises([]);
+        return;
+      }
+
+      const dateStr = currentDate.toISOString().split('T')[0];
+      const { data, error } = await supabase
+        .from('exercises')
+        .select('*')
+        .eq('user_id', user.id)
+        .eq('date', dateStr)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      setExercises((data ?? []) as ExerciseLog[]);
+    } catch (err) {
+      console.error('Egzersizler alınırken hata:', err);
+    }
+  }, [currentDate]);
+
   useEffect(() => {
-    loadExercises();
-    
-    // Real-time subscription
-    if (!supabase) return;
+    void loadExercises();
 
     const channel = supabase
-      .channel('exercise_logs_changes')
+      .channel(`exercises_changes_${currentDate.toISOString().split('T')[0]}`)
       .on(
         'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'exercise_logs',
-        },
+        { event: '*', schema: 'public', table: 'exercises' },
         () => {
-          loadExercises();
-        }
+          void loadExercises();
+        },
       )
       .subscribe();
 
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [currentDate, supabase]);
+  }, [currentDate, loadExercises]);
 
-  const loadExercises = async () => {
-    if (!supabase) return;
-
+  const handleDelete = async (id: string): Promise<void> => {
     try {
-      const dateStr = currentDate.toISOString().split('T')[0];
-      const { data, error } = await supabase
-        .from('exercise_logs')
-        .select('*')
-        .eq('log_date', dateStr)
-        .order('created_at', { ascending: false });
-
+      const { error } = await supabase.from('exercises').delete().eq('id', id);
       if (error) throw error;
-      setExercises(data || []);
-    } catch (error) {
-      console.error('Egzersizler alınırken hata:', error);
-    }
-  };
-
-  const handleDelete = async (id: number) => {
-    if (!supabase) return;
-
-    try {
-      const { error } = await supabase
-        .from('exercise_logs')
-        .delete()
-        .eq('id', id);
-
-      if (error) throw error;
-
-      // Refresh exercises
       await loadExercises();
-      
-      // Notify parent component
-      if (onExercisesChange) {
-        onExercisesChange();
-      }
-    } catch (error) {
-      console.error('Egzersiz silinirken hata:', error);
+      onExercisesChange?.();
+    } catch (err) {
+      console.error('Egzersiz silinirken hata:', err);
       alert('Egzersiz silinirken bir hata oluştu.');
     }
   };
 
-  if (exercises.length === 0) {
-    return null;
-  }
+  if (exercises.length === 0) return null;
 
-  const totalCalories = exercises.reduce((sum, ex) => sum + ex.calories_burned, 0);
-  const totalMinutes = exercises.reduce((sum, ex) => sum + ex.duration_minutes, 0);
+  const totalCalories = exercises.reduce((sum, ex) => sum + (Number(ex.calories_burned) || 0), 0);
+  const totalMinutes = exercises.reduce((sum, ex) => sum + (Number(ex.duration_minutes) || 0), 0);
 
   return (
     <Card className="border-2">
@@ -117,16 +100,20 @@ export function ExerciseList({ currentDate, onExercisesChange }: ExerciseListPro
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2">
                 <p className="font-medium text-sm text-gray-900 truncate">{exercise.exercise_name}</p>
-                <span className="text-xs text-gray-500">({Math.round(exercise.duration_minutes)} dk)</span>
+                {exercise.duration_minutes != null && (
+                  <span className="text-xs text-gray-500">
+                    ({Math.round(Number(exercise.duration_minutes))} dk)
+                  </span>
+                )}
               </div>
               <div className="flex items-center gap-3 mt-1 text-xs text-gray-600">
                 <span className="font-medium text-orange-600">
-                  {Math.round(exercise.calories_burned)} kcal yakıldı
+                  {Math.round(Number(exercise.calories_burned) || 0)} kcal yakıldı
                 </span>
               </div>
             </div>
             <Button
-              onClick={() => handleDelete(exercise.id)}
+              onClick={() => void handleDelete(exercise.id)}
               size="icon"
               variant="ghost"
               className="h-7 w-7 flex-shrink-0 ml-2 text-red-500 hover:text-red-700 hover:bg-red-50"

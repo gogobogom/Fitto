@@ -23,6 +23,7 @@ import {
 } from 'lucide-react';
 import { DoodleImage } from './DoodleImage';
 import { WaterTracking } from './WaterTracking';
+import { ShareWeekButton } from './ShareWeekButton';
 import { simpleStorage } from '@/lib/secureStorage';
 import { useLanguage } from '@/contexts/LanguageContext';
 import type { UserProfile, UserGoals, DailySummary } from '../types/supabase';
@@ -543,25 +544,30 @@ export function EnhancedDashboard({
       {/* Motivational Banner */}
       <Card className="border-4 border-black bg-gradient-to-r from-yellow-50 via-orange-50 to-red-50">
         <CardContent className="pt-6">
-          <div className="flex items-center gap-3">
-            <div className="flex-shrink-0">
-              <DoodleImage character="lightning" alt={language === 'tr' ? 'Motivasyon' : 'Motivation'} size="md" />
-            </div>
-            <div className="flex-1">
-              <p className="text-lg font-bold text-gray-900">{activeMotivation.text}</p>
-              <p className="text-sm text-gray-600 mt-1">
-                {language === 'tr' 
-                  ? `Bugün ${Math.round(netCalories)} / ${Math.round(targetCalories)} kcal tükettin`
-                  : `Today you consumed ${Math.round(netCalories)} / ${Math.round(targetCalories)} kcal`
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
+            <div className="flex flex-1 items-center gap-3">
+              <div className="flex-shrink-0">
+                <DoodleImage character="lightning" alt={language === 'tr' ? 'Motivasyon' : 'Motivation'} size="md" />
+              </div>
+              <div className="flex-1">
+                <p className="text-lg font-bold text-gray-900">{activeMotivation.text}</p>
+                <p className="text-sm text-gray-600 mt-1">
+                  {language === 'tr'
+                    ? `Bugün ${Math.round(netCalories)} / ${Math.round(targetCalories)} kcal tükettin`
+                    : `Today you consumed ${Math.round(netCalories)} / ${Math.round(targetCalories)} kcal`
+                  }
+                </p>
+              </div>
+              <Badge variant="secondary" className="bg-orange-100 text-orange-700 border-orange-300">
+                {calorieProgress >= 80 && calorieProgress <= 110
+                  ? (language === 'tr' ? 'Hedefte!' : 'On Target!')
+                  : (language === 'tr' ? 'Devam Et' : 'Keep Going')
                 }
-              </p>
+              </Badge>
             </div>
-            <Badge variant="secondary" className="bg-orange-100 text-orange-700 border-orange-300">
-              {calorieProgress >= 80 && calorieProgress <= 110 
-                ? (language === 'tr' ? 'Hedefte!' : 'On Target!') 
-                : (language === 'tr' ? 'Devam Et' : 'Keep Going')
-              }
-            </Badge>
+            {connection?.userId && (
+              <ShareWeekButton userId={connection.userId} className="self-start sm:self-auto" />
+            )}
           </div>
         </CardContent>
       </Card>

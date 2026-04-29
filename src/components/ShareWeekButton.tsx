@@ -15,6 +15,7 @@ import { Button } from './ui/button';
 import { Share2, Check } from 'lucide-react';
 import { toast } from 'sonner';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { copyToClipboard } from '@/lib/clipboard';
 
 interface ShareWeekButtonProps {
   userId: string;

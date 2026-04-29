@@ -104,15 +104,22 @@ export function useSupabase(): SupabaseState {
 
   const channelsRef = useRef<RealtimeChannel[]>([]);
   const authUnsubRef = useRef<null | (() => void)>(null);
+  const channelNonceRef = useRef<number>(0);
 
-  const clearRealtime = () => {
+  const clearRealtime = async (): Promise<void> => {
     if (channelsRef.current.length > 0) {
       devLog.log('Supabase abonelikleri temizleniyor...');
     }
-    channelsRef.current.forEach((ch) => {
-      supabase.removeChannel(ch);
-    });
+    const channels = channelsRef.current;
     channelsRef.current = [];
+    // removeChannel is async — await all of them so the server-side socket is
+    // fully detached before we reuse the same channel name. This prevents:
+    //   "cannot add `postgres_changes` callbacks ... after `subscribe()`"
+    await Promise.all(
+      channels.map((ch) =>
+        Promise.resolve(supabase.removeChannel(ch)).catch(() => undefined),
+      ),
+    );
   };
 
   const loadProfile = async (currentUserId: string): Promise<void> => {
@@ -207,13 +214,22 @@ export function useSupabase(): SupabaseState {
     }
   };
 
-  const subscribeToTables = (currentUserId: string): void => {
-    clearRealtime();
+  const subscribeToTables = async (currentUserId: string): Promise<void> => {
+    // Make sure any previous channels are fully detached on the server before
+    // we reuse the same channel names — otherwise Supabase Realtime throws
+    // "cannot add `postgres_changes` callbacks ... after `subscribe()`".
+    await clearRealtime();
 
     devLog.log('Supabase Realtime abonelikleri başlatılıyor...');
 
+    // Unique nonce ensures a fresh channel name on every (re)subscribe so we
+    // never collide with a not-yet-removed prior socket (e.g. React StrictMode
+    // double-effect, rapid auth-state changes, hot reload).
+    channelNonceRef.current += 1;
+    const nonce = `${Date.now().toString(36)}_${channelNonceRef.current}`;
+
     const profileChannel = supabase
-      .channel(`user_profiles_changes_${currentUserId}`)
+      .channel(`user_profiles_changes_${currentUserId}_${nonce}`)
       .on(
         'postgres_changes',
         {
@@ -234,7 +250,7 @@ export function useSupabase(): SupabaseState {
     channelsRef.current.push(profileChannel);
 
     const goalsChannel = supabase
-      .channel(`user_goals_changes_${currentUserId}`)
+      .channel(`user_goals_changes_${currentUserId}_${nonce}`)
       .on(
         'postgres_changes',
         {
@@ -255,7 +271,7 @@ export function useSupabase(): SupabaseState {
     channelsRef.current.push(goalsChannel);
 
     const mealsChannel = supabase
-      .channel(`meals_changes_${currentUserId}`)
+      .channel(`meals_changes_${currentUserId}_${nonce}`)
       .on(
         'postgres_changes',
         {
@@ -284,7 +300,7 @@ export function useSupabase(): SupabaseState {
     channelsRef.current.push(mealsChannel);
 
     const exercisesChannel = supabase
-      .channel(`exercises_changes_${currentUserId}`)
+      .channel(`exercises_changes_${currentUserId}_${nonce}`)
       .on(
         'postgres_changes',
         {
@@ -313,7 +329,7 @@ export function useSupabase(): SupabaseState {
     channelsRef.current.push(exercisesChannel);
 
     const summaryChannel = supabase
-      .channel(`daily_summaries_changes_${currentUserId}`)
+      .channel(`daily_summaries_changes_${currentUserId}_${nonce}`)
       .on(
         'postgres_changes',
         {
@@ -347,11 +363,11 @@ export function useSupabase(): SupabaseState {
     await loadGoals(currentUserId);
     await loadOtherData(currentUserId);
 
-    subscribeToTables(currentUserId);
+    await subscribeToTables(currentUserId);
   };
 
   const resetToLoggedOut = () => {
-    clearRealtime();
+    void clearRealtime();
     setConnected(false);
     setUserId(null);
     setUserProfile(null);
@@ -419,7 +435,7 @@ export function useSupabase(): SupabaseState {
 
     return () => {
       cancelled = true;
-      clearRealtime();
+      void clearRealtime();
       if (authUnsubRef.current) {
         authUnsubRef.current();
         authUnsubRef.current = null;

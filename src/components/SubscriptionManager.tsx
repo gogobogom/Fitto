@@ -114,18 +114,23 @@ export function SubscriptionManager({ connection }: SubscriptionManagerProps) {
       // But typically RevenueCat is the source of truth on mobile.
       // For now, if NOT native, we definitely use Supabase.
       if (!Capacitor.isNativePlatform()) {
+        // Connection may not be ready yet (user signing in, hot reload, etc).
+        // Just bail out — the parent re-runs this effect when `connection`
+        // becomes non-null (it's listed in the dependency array).
+        if (!connection || !connection.userId || !connection.supabase) return;
+
         try {
           const { data, error } = await connection.supabase
             .from('subscriptions')
             .select('*')
-            .eq('identity', connection.userId)
+            .eq('user_id', connection.userId)
             .maybeSingle();
-          
+
           if (error) {
             console.error('Subscription load error:', error);
             return;
           }
-          
+
           if (data) {
             setCurrentPlan(data.plan_type);
             if (data.expires_at) {

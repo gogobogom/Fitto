@@ -1,15 +1,18 @@
 /**
  * Public landing page for a "Share my week" link.
  *
- * Renders a hero card showing the OG image and a CTA to open Fitto.
- * Sets Open Graph + Twitter + Farcaster Mini App metadata so the link
- * embeds nicely on Twitter/X, Farcaster (Warpcast), Discord, Slack, etc.
+ * Optimized for X (Twitter) and Instagram. The card itself works perfectly as
+ * an Instagram Story background (1200×630 → user can crop to 1080×1920 if
+ * needed). For Twitter we expose a `https://twitter.com/intent/tweet` intent.
+ * Native `navigator.share` on mobile surfaces the OS share sheet which already
+ * includes Instagram.
  */
 
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { headers } from 'next/headers';
 import { loadWeekStats } from '@/lib/share/weekStats';
+import { ShareActions } from './share-actions';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 60;
@@ -34,29 +37,12 @@ export async function generateMetadata({ params, searchParams }: PageProps): Pro
 
   const imageUrl = `${origin}/share/week/${userId}/image?lang=${lang}`;
   const pageUrl = `${origin}/share/week/${userId}?lang=${lang}`;
-  const appUrl = `${origin}/?utm_source=share&utm_medium=week_card&utm_campaign=fitto_week`;
 
   const title = lang === 'tr' ? 'Fitto · Bu haftaki ilerlemem' : 'Fitto · My week of progress';
   const description =
     lang === 'tr'
       ? 'Bu hafta Fitto ile beslenme ve fitness ilerlememi takip ettim. Sen de katıl ve hedefine ulaş!'
       : 'Tracking my nutrition & fitness progress this week with Fitto. Join me and crush your goals!';
-
-  // Farcaster Mini App / Frame metadata (v2 + legacy v1 fallback)
-  const fcFrame = JSON.stringify({
-    version: 'next',
-    imageUrl,
-    button: {
-      title: lang === 'tr' ? "Fitto'yu aç" : 'Open Fitto',
-      action: {
-        type: 'launch_frame',
-        name: 'Fitto',
-        url: appUrl,
-        splashImageUrl: imageUrl,
-        splashBackgroundColor: '#F97316',
-      },
-    },
-  });
 
   return {
     title,
@@ -75,17 +61,14 @@ export async function generateMetadata({ params, searchParams }: PageProps): Pro
       title,
       description,
       images: [imageUrl],
+      creator: '@FittoApp',
+      site: '@FittoApp',
     },
     other: {
-      // Farcaster Frames v2 / Mini Apps
-      'fc:frame': fcFrame,
-      'fc:miniapp': fcFrame,
-      // Frames v1 fallback
-      'fc:frame:image': imageUrl,
-      'fc:frame:image:aspect_ratio': '1.91:1',
-      'fc:frame:button:1': lang === 'tr' ? "Fitto'yu aç" : 'Open Fitto',
-      'fc:frame:button:1:action': 'link',
-      'fc:frame:button:1:target': appUrl,
+      // Instagram & generic OG image hints
+      'og:image:type': 'image/png',
+      // Prevent SEO surface for personal share pages
+      robots: 'noindex, nofollow',
     },
   };
 }
@@ -96,11 +79,13 @@ export default async function ShareWeekPage({ params, searchParams }: PageProps)
   const lang: 'tr' | 'en' = rawLang === 'en' ? 'en' : 'tr';
   const origin = await getOrigin();
   const imageUrl = `${origin}/share/week/${userId}/image?lang=${lang}`;
-  const appUrl = `${origin}/?utm_source=share&utm_medium=week_card&utm_campaign=fitto_week`;
+  const pageUrl = `${origin}/share/week/${userId}?lang=${lang}`;
+  // Referral-aware deep link: when a friend opens the app, signup will pick
+  // up `?ref=` and credit both users via the DB trigger.
+  const appUrl = `${origin}/auth/signup?ref=${userId}&utm_source=share&utm_medium=week_card&utm_campaign=fitto_week`;
 
   const t = (tr: string, en: string) => (lang === 'tr' ? tr : en);
 
-  // Load stats so the page itself shows real data (not just the OG card).
   let stats: Awaited<ReturnType<typeof loadWeekStats>> | null = null;
   try {
     stats = await loadWeekStats(userId, lang);
@@ -116,7 +101,7 @@ export default async function ShareWeekPage({ params, searchParams }: PageProps)
             {stats ? `@${stats.username}` : 'Fitto'}
           </h1>
           <p className="mt-3 text-lg text-gray-700">
-            {t('Bu haftaki ilerlemem 👇', "My week of progress 👇")}
+            {t('Bu haftaki ilerlemem 👇', 'My week of progress 👇')}
           </p>
         </div>
 
@@ -141,37 +126,27 @@ export default async function ShareWeekPage({ params, searchParams }: PageProps)
               label={t('Hedefte gün', 'On-target days')}
               value={`${stats.daysOnTarget}/${Math.max(stats.daysLogged, 1)}`}
             />
-            <Stat
-              label={t('Uyum', 'Adherence')}
-              value={`${stats.adherencePct}%`}
-            />
-            <Stat
-              label={t('Ort. net kalori', 'Avg net kcal')}
-              value={`${stats.avgNet}`}
-            />
+            <Stat label={t('Uyum', 'Adherence')} value={`${stats.adherencePct}%`} />
+            <Stat label={t('Ort. net kalori', 'Avg net kcal')} value={`${stats.avgNet}`} />
           </div>
         )}
 
-        <div className="flex w-full flex-col gap-3 sm:flex-row">
-          <Link
-            href={appUrl}
-            className="flex-1 rounded-2xl border-4 border-black bg-orange-500 px-6 py-4 text-center text-lg font-bold text-white shadow-[4px_4px_0_rgba(0,0,0,0.2)] transition hover:bg-orange-600"
-            data-testid="open-fitto-cta"
-          >
-            {t("🚀 Fitto'yu aç", '🚀 Open Fitto')}
-          </Link>
-          <Link
-            href={`https://warpcast.com/~/compose?text=${encodeURIComponent(
-              t('Bu haftaki Fitto ilerlemem 💪', 'My week of progress on Fitto 💪'),
-            )}&embeds[]=${encodeURIComponent(`${origin}/share/week/${userId}?lang=${lang}`)}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex-1 rounded-2xl border-4 border-black bg-purple-600 px-6 py-4 text-center text-lg font-bold text-white shadow-[4px_4px_0_rgba(0,0,0,0.2)] transition hover:bg-purple-700"
-            data-testid="share-warpcast-cta"
-          >
-            {t("🟣 Warpcast'te paylaş", '🟣 Share on Warpcast')}
-          </Link>
-        </div>
+        {/* Primary CTA */}
+        <Link
+          href={appUrl}
+          className="w-full rounded-2xl border-4 border-black bg-orange-500 px-6 py-4 text-center text-lg font-bold text-white shadow-[4px_4px_0_rgba(0,0,0,0.2)] transition hover:bg-orange-600"
+          data-testid="open-fitto-cta"
+        >
+          {t("🚀 Fitto'ya katıl", '🚀 Join Fitto')}
+        </Link>
+
+        {/* Social share buttons (client component) */}
+        <ShareActions
+          imageUrl={imageUrl}
+          pageUrl={pageUrl}
+          lang={lang}
+          username={stats?.username ?? 'Fitto'}
+        />
 
         <p className="text-center text-sm text-gray-600">
           {t(

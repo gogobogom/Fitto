@@ -3,7 +3,10 @@
  *
  * GET /share/week/[userId]/image?lang=tr|en
  *
- * Returns a 1200×630 PNG suitable for Twitter / Open Graph / Farcaster Frames.
+ * Returns a 1200×630 PNG suitable for X (Twitter) cards, Instagram, Open
+ * Graph (LinkedIn / WhatsApp / Slack / Discord), etc. Works as an Instagram
+ * Story background or feed image.
+ *
  * Uses Next.js' built-in `ImageResponse` (no extra dependency).
  *
  * NOTE: This route lives outside the `/api/*` namespace because the Emergent

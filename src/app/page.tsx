@@ -8,10 +8,6 @@ import { Onboarding } from '../components/Onboarding';
 import { Dashboard } from '../components/Dashboard';
 
 import { Card, CardContent } from '../components/ui/card';
-import { sdk } from '@farcaster/miniapp-sdk';
-import { useAddMiniApp } from '@/hooks/useAddMiniApp';
-import { useQuickAuth } from '@/hooks/useQuickAuth';
-import { useIsInFarcaster } from '@/hooks/useIsInFarcaster';
 import { useLanguage } from '@/contexts/LanguageContext';
 import AICoachOrchestrator from '@/components/ai/AICoachOrchestrator';
 import type { Gender, ActivityLevel, GoalType } from '@/types/supabase';
@@ -27,11 +23,6 @@ export default function Home() {
     if (typeof window !== 'undefined') return !localStorage.getItem('fitto_welcomed');
     return true;
   });
-
-  // --- Farcaster (only run when inside Farcaster)
-  const { addMiniApp } = useAddMiniApp();
-  const isInFarcaster = useIsInFarcaster();
-  useQuickAuth(isInFarcaster);
 
   // --- Your existing hook (may depend on SpacetimeDB)
   const {
@@ -113,48 +104,6 @@ export default function Home() {
     // If we forced ready due to Supabase session, do NOT show endless loading
     return isConnecting && !forceReady;
   }, [isConnecting, forceReady]);
-
-  // --- Farcaster init (guarded)
-  useEffect(() => {
-    if (!isInFarcaster) return;
-
-    let isMounted = true;
-
-    const initializeFarcaster = async (): Promise<void> => {
-      try {
-        await new Promise((resolve) => setTimeout(resolve, 100));
-        if (!isMounted) return;
-
-        if (document.readyState !== 'complete') {
-          await new Promise<void>((resolve) => {
-            if (document.readyState === 'complete') resolve();
-            else window.addEventListener('load', () => resolve(), { once: true });
-          });
-        }
-
-        if (!isMounted) return;
-
-        await sdk.actions.ready();
-
-        if (isMounted) {
-          try {
-            await addMiniApp();
-          } catch (error) {
-            const msg = error instanceof Error ? error.message : String(error);
-            if (!msg.includes('RejectedByUser')) console.error('Failed to add mini app:', error);
-          }
-        }
-      } catch (error) {
-        console.error('Failed to initialize Farcaster SDK:', error);
-      }
-    };
-
-    void initializeFarcaster();
-
-    return () => {
-      isMounted = false;
-    };
-  }, [addMiniApp, isInFarcaster]);
 
   // Central redirect logic (based on effective flags)
   useEffect(() => {

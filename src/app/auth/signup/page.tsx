@@ -1,17 +1,21 @@
 'use client';
 
-import React, { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import React, { useEffect, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { supabase } from '@/lib/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
-import { Loader2, Mail, Lock, User } from 'lucide-react';
+import { Loader2, Mail, Lock, User, Gift } from 'lucide-react';
 import Link from 'next/link';
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const REFERRAL_BONUS_REQUESTS = 70;
 
 export default function SignupPage() {
   const router = useRouter();
+  const search = useSearchParams();
   const [email, setEmail] = useState<string>('');
   const [password, setPassword] = useState<string>('');
   const [confirmPassword, setConfirmPassword] = useState<string>('');
@@ -19,6 +23,29 @@ export default function SignupPage() {
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<boolean>(false);
+  const [referrerId, setReferrerId] = useState<string | null>(null);
+
+  // Capture ?ref=<uuid> from the URL on first load and remember it
+  useEffect(() => {
+    const fromUrl = search?.get('ref');
+    let validRef: string | null = null;
+    if (fromUrl && UUID_RE.test(fromUrl)) {
+      validRef = fromUrl;
+      try {
+        sessionStorage.setItem('fitto_ref', fromUrl);
+      } catch {
+        /* ignore */
+      }
+    } else {
+      try {
+        const cached = sessionStorage.getItem('fitto_ref');
+        if (cached && UUID_RE.test(cached)) validRef = cached;
+      } catch {
+        /* ignore */
+      }
+    }
+    setReferrerId(validRef);
+  }, [search]);
 
   const handleSignup = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -26,14 +53,11 @@ export default function SignupPage() {
     setError(null);
     setSuccess(false);
 
-    // Validate passwords match
     if (password !== confirmPassword) {
       setError('Şifreler eşleşmiyor');
       setLoading(false);
       return;
     }
-
-    // Validate password length
     if (password.length < 6) {
       setError('Şifre en az 6 karakter olmalı');
       setLoading(false);
@@ -41,26 +65,25 @@ export default function SignupPage() {
     }
 
     try {
+      const metadata: Record<string, string> = { full_name: fullName };
+      if (referrerId) metadata.referrer_user_id = referrerId;
+
       const { data, error: signUpError } = await supabase.auth.signUp({
         email,
         password,
-        options: {
-          data: {
-            full_name: fullName,
-          },
-        },
+        options: { data: metadata },
       });
 
-      if (signUpError) {
-        throw signUpError;
-      }
+      if (signUpError) throw signUpError;
 
       if (data.user) {
         setSuccess(true);
-        // Wait 2 seconds then redirect to login
-        setTimeout(() => {
-          router.push('/auth/login');
-        }, 2000);
+        try {
+          sessionStorage.removeItem('fitto_ref');
+        } catch {
+          /* ignore */
+        }
+        setTimeout(() => router.push('/auth/login'), 2000);
       }
     } catch (err: unknown) {
       const errorMsg = err instanceof Error ? err.message : 'Kayıt başarısız';
@@ -83,15 +106,38 @@ export default function SignupPage() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <form onSubmit={handleSignup} className="space-y-4">
+            {referrerId && (
+              <div
+                className="mb-4 flex items-start gap-3 rounded-lg border-2 border-dashed border-orange-300 bg-orange-50 p-3"
+                data-testid="referral-banner"
+              >
+                <Gift className="mt-0.5 h-5 w-5 flex-shrink-0 text-orange-600" />
+                <div className="text-sm">
+                  <p className="font-semibold text-orange-900">
+                    🎁 Davet edildin! / You&apos;ve been invited!
+                  </p>
+                  <p className="text-orange-800">
+                    Kayıt olunca sen ve seni davet eden arkadaşın{' '}
+                    <strong>{REFERRAL_BONUS_REQUESTS} ücretsiz AI Coach soru</strong> kazanır.
+                    <br />
+                    <span className="opacity-90">
+                      Sign up and both you and your friend get{' '}
+                      <strong>{REFERRAL_BONUS_REQUESTS} free AI Coach credits</strong>.
+                    </span>
+                  </p>
+                </div>
+              </div>
+            )}
+
+            <form onSubmit={handleSignup} className="space-y-4" data-testid="signup-form">
               {error && (
-                <div className="p-3 bg-red-50 border border-red-200 rounded-md text-red-700 text-sm">
+                <div className="p-3 bg-red-50 border border-red-200 rounded-md text-red-700 text-sm" data-testid="signup-error">
                   {error}
                 </div>
               )}
 
               {success && (
-                <div className="p-3 bg-green-50 border border-green-200 rounded-md text-green-700 text-sm">
+                <div className="p-3 bg-green-50 border border-green-200 rounded-md text-green-700 text-sm" data-testid="signup-success">
                   Kayıt başarılı! Giriş sayfasına yönlendiriliyorsun...
                 </div>
               )}
@@ -110,6 +156,7 @@ export default function SignupPage() {
                   required
                   disabled={loading || success}
                   className="w-full"
+                  data-testid="signup-fullname"
                 />
               </div>
 
@@ -127,6 +174,7 @@ export default function SignupPage() {
                   required
                   disabled={loading || success}
                   className="w-full"
+                  data-testid="signup-email"
                 />
               </div>
 
@@ -145,6 +193,7 @@ export default function SignupPage() {
                   disabled={loading || success}
                   className="w-full"
                   minLength={6}
+                  data-testid="signup-password"
                 />
               </div>
 
@@ -163,6 +212,7 @@ export default function SignupPage() {
                   disabled={loading || success}
                   className="w-full"
                   minLength={6}
+                  data-testid="signup-confirm-password"
                 />
               </div>
 
@@ -170,6 +220,7 @@ export default function SignupPage() {
                 type="submit"
                 className="w-full bg-orange-600 hover:bg-orange-700 text-white"
                 disabled={loading || success}
+                data-testid="signup-submit-btn"
               >
                 {loading ? (
                   <>

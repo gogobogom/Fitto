@@ -54,7 +54,9 @@ export interface SupabaseConnection {
       exerciseName: string,
       sets: number,
       reps: number,
-      weight: number
+      weight: number,
+      durationMinutes?: number,
+      caloriesBurned?: number
     ) => Promise<void>;
     getDailySummary: (date: unknown) => Promise<void>;
 
@@ -538,7 +540,9 @@ export function useSupabase(): SupabaseState {
           exerciseName: string,
           sets: number,
           reps: number,
-          weight: number
+          weight: number,
+          durationMinutes?: number,
+          caloriesBurned?: number
         ): Promise<void> => {
           const { error } = await supabase.from('exercises').insert({
             user_id: userId,
@@ -546,6 +550,8 @@ export function useSupabase(): SupabaseState {
             sets,
             reps,
             weight,
+            duration_minutes: durationMinutes ?? null,
+            calories_burned: caloriesBurned ?? null,
             date: new Date().toISOString().split('T')[0],
           });
 

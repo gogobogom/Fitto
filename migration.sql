@@ -65,20 +65,22 @@ $$;
 
 -- 4. CORE PROFILE TABLES -----------------------------------------------------
 CREATE TABLE public.user_profiles (
-  id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  user_id         UUID NOT NULL UNIQUE REFERENCES auth.users(id) ON DELETE CASCADE,
-  full_name       TEXT,
-  username        TEXT,
-  email           TEXT,
-  age             INTEGER,
-  weight_kg       NUMERIC(5,2),
-  height_cm       NUMERIC(5,2),
-  gender          TEXT CHECK (gender IN ('male','female','other')),
-  activity_level  TEXT CHECK (activity_level IN ('sedentary','lightlyActive','moderatelyActive','veryActive','extraActive')),
-  created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  id                UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id           UUID NOT NULL UNIQUE REFERENCES auth.users(id) ON DELETE CASCADE,
+  full_name         TEXT,
+  username          TEXT,
+  email             TEXT,
+  age               INTEGER,
+  weight_kg         NUMERIC(5,2),
+  height_cm         NUMERIC(5,2),
+  gender            TEXT CHECK (gender IN ('male','female','other')),
+  activity_level    TEXT CHECK (activity_level IN ('sedentary','lightlyActive','moderatelyActive','veryActive','extraActive')),
+  referrer_user_id  UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+  created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
-CREATE INDEX idx_user_profiles_user_id ON public.user_profiles(user_id);
+CREATE INDEX idx_user_profiles_user_id  ON public.user_profiles(user_id);
+CREATE INDEX idx_user_profiles_referrer ON public.user_profiles(referrer_user_id) WHERE referrer_user_id IS NOT NULL;
 CREATE TRIGGER trg_user_profiles_updated
   BEFORE UPDATE ON public.user_profiles
   FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
@@ -249,21 +251,58 @@ CREATE TRIGGER trg_trial_status_updated
   BEFORE UPDATE ON public.trial_status
   FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
 
--- 9. AUTO-CREATE PROFILE ROW ON SIGNUP ---------------------------------------
+-- 9. AUTO-CREATE PROFILE ROW ON SIGNUP + REFERRAL CREDITING ------------------
+-- Reads `raw_user_meta_data->>'referrer_user_id'` (set by the signup form when
+-- ?ref=<uuid> is in the URL) and:
+--   • stores it on the new user's profile,
+--   • bumps both users' subscriptions.ai_requests_limit by 70 (≈ 1 week of
+--     daily AI Coach quota at the default 10/day).
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS TRIGGER LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE
+  v_ref_text TEXT;
+  v_ref UUID;
+  REFERRAL_BONUS CONSTANT INT := 70;
 BEGIN
-  INSERT INTO public.user_profiles (user_id, email, full_name, username)
+  v_ref_text := NEW.raw_user_meta_data->>'referrer_user_id';
+  IF v_ref_text IS NOT NULL AND v_ref_text <> '' THEN
+    BEGIN
+      v_ref := v_ref_text::UUID;
+      -- Don't allow self-referral
+      IF v_ref = NEW.id THEN v_ref := NULL; END IF;
+      -- Validate that the referrer actually exists
+      IF v_ref IS NOT NULL AND NOT EXISTS (SELECT 1 FROM auth.users WHERE id = v_ref) THEN
+        v_ref := NULL;
+      END IF;
+    EXCEPTION WHEN OTHERS THEN
+      v_ref := NULL;
+    END;
+  END IF;
+
+  INSERT INTO public.user_profiles (user_id, email, full_name, username, referrer_user_id)
   VALUES (
     NEW.id,
     NEW.email,
     COALESCE(NEW.raw_user_meta_data->>'full_name', split_part(NEW.email, '@', 1)),
-    COALESCE(NEW.raw_user_meta_data->>'full_name', split_part(NEW.email, '@', 1))
+    COALESCE(NEW.raw_user_meta_data->>'full_name', split_part(NEW.email, '@', 1)),
+    v_ref
   )
   ON CONFLICT (user_id) DO NOTHING;
 
-  INSERT INTO public.subscriptions (user_id) VALUES (NEW.id) ON CONFLICT DO NOTHING;
-  INSERT INTO public.trial_status  (user_id) VALUES (NEW.id) ON CONFLICT DO NOTHING;
+  -- New user gets a base subscription with the referral bonus already applied
+  INSERT INTO public.subscriptions (user_id, ai_requests_limit)
+  VALUES (NEW.id, 10 + (CASE WHEN v_ref IS NOT NULL THEN REFERRAL_BONUS ELSE 0 END))
+  ON CONFLICT DO NOTHING;
+  INSERT INTO public.trial_status (user_id) VALUES (NEW.id) ON CONFLICT DO NOTHING;
+
+  -- Reward the referrer too
+  IF v_ref IS NOT NULL THEN
+    INSERT INTO public.subscriptions (user_id, ai_requests_limit)
+    VALUES (v_ref, 10 + REFERRAL_BONUS)
+    ON CONFLICT (user_id) DO UPDATE
+      SET ai_requests_limit = public.subscriptions.ai_requests_limit + REFERRAL_BONUS,
+          updated_at = NOW();
+  END IF;
 
   RETURN NEW;
 END;

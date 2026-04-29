@@ -42,6 +42,7 @@ export interface UserProfile {
   height_cm: number | null;
   gender: Gender | string | null;
   activity_level: ActivityLevel | string | null;
+  referrer_user_id: string | null;
   created_at: string;
   updated_at: string;
 }

@@ -24,20 +24,22 @@ datasource db {
 // -------------------- Profiles & Goals --------------------
 
 model UserProfile {
-  id            String   @id @default(uuid()) @db.Uuid
-  userId        String   @unique @map("user_id") @db.Uuid
-  fullName      String?  @map("full_name")
-  username      String?
-  email         String?
-  age           Int?
-  weightKg      Decimal? @map("weight_kg") @db.Decimal(5, 2)
-  heightCm      Decimal? @map("height_cm") @db.Decimal(5, 2)
-  gender        String?
-  activityLevel String?  @map("activity_level")
-  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt     DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  id              String   @id @default(uuid()) @db.Uuid
+  userId          String   @unique @map("user_id") @db.Uuid
+  fullName        String?  @map("full_name")
+  username        String?
+  email           String?
+  age             Int?
+  weightKg        Decimal? @map("weight_kg") @db.Decimal(5, 2)
+  heightCm        Decimal? @map("height_cm") @db.Decimal(5, 2)
+  gender          String?
+  activityLevel   String?  @map("activity_level")
+  referrerUserId  String?  @map("referrer_user_id") @db.Uuid
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   @@index([userId])
+  @@index([referrerUserId])
   @@map("user_profiles")
 }
 

@@ -68,12 +68,31 @@ All personal tables are protected by RLS owner policies (`user_id = auth.uid()`)
 
 ### Phase 2 — Share-my-week social card (April 29)
 - 🚀 **OG image route** (`/share/week/[userId]/image`) — Edge-friendly `next/og` `ImageResponse` that renders a 1200×630 branded PNG (Fitto orange→pink gradient, big "X / Y on-target days" headline, 7-day bar chart with green/red/amber bands, adherence %, avg net kcal). Cached 5 min on the CDN.
-- 🚀 **Share landing page** (`/share/week/[userId]`) — server component with full `generateMetadata`: `og:image` + `twitter:summary_large_image` + Farcaster Frame v1 + Mini-App `fc:miniapp` JSON. Renders the OG card, three quick stats, and CTAs to "Open Fitto" + "Share on Warpcast" (warpcast.com/~/compose intent).
+- 🚀 **Share landing page** (`/share/week/[userId]`) — server component with full `generateMetadata`: `og:image` + `twitter:summary_large_image` + `twitter:creator`. Renders the OG card, three quick stats, primary CTA, and four social actions.
 - 🚀 **Server-only Supabase admin client** (`src/lib/supabase/server.ts`) using the service-role key, `import 'server-only'` to prevent leaking it to the bundle.
-- 🚀 **Stats helper** (`src/lib/share/weekStats.ts`) — computes `daysOnTarget / daysLogged`, `adherencePct`, per-day net kcal across last 7 days; safe on legacy schemas (`calories_burned` may not exist yet).
-- 🚀 **`<ShareWeekButton />`** — wired into the dashboard motivational banner. Uses `navigator.share` → clipboard → new-tab fallback chain.
-- ⚠️ **Routing gotcha solved**: discovered the Emergent Kubernetes ingress proxies all `/api/*` to port 8001 (FastAPI), not Next.js. Moved the OG endpoint off `/api/share/...` to `/share/week/[userId]/image` so it's reachable through the public preview URL.
-- 🔬 Verified end-to-end: signup → seed 7 days of meals → fetch OG (172 KB PNG, 200 OK through preview URL) → landing page renders with username, stats, embedded card, and Warpcast intent. Shared TR & EN locales both work.
+- 🚀 **Stats helper** (`src/lib/share/weekStats.ts`) — computes `daysOnTarget / daysLogged`, `adherencePct`, per-day net kcal across last 7 days.
+- 🚀 **`<ShareWeekButton />`** wired into the dashboard banner. Uses `navigator.share` → clipboard → new-tab fallback chain.
+- ⚠️ **Routing gotcha solved**: Emergent K8s ingress proxies all `/api/*` to port 8001, so the route was moved to `/share/week/[userId]/image` (sibling of the page).
+
+### Phase 3 — Social pivot to X & Instagram (April 29 — same day)
+- 🔄 **Removed all Farcaster surfaces**: deleted `/components/FarcasterWrapper`, `FarcasterToastManager`, `FarcasterManifestSigner`, hooks `useIsInFarcaster` / `useAddMiniApp` / `useQuickAuth` / `useManifestStatus`, `/utils/manifestStatus.ts`, `/api/me` (Quick-Auth route), `public/.well-known/farcaster.json`. Removed `@farcaster/miniapp-sdk` & `@farcaster/quick-auth` deps. Stripped Farcaster init from `app/page.tsx`. Removed `FarcasterWrapper` from `app/layout.tsx`. **Zero Farcaster references remain.**
+- 🔄 **Replaced Warpcast button with platform-agnostic `<ShareActions />`** (new file `share/week/[userId]/share-actions.tsx`) — 4 buttons:
+  - **X (Twitter)** — `https://twitter.com/intent/tweet` intent with hashtags `#Fitto #FitnessJourney`
+  - **Share** — `navigator.share` to surface the OS share sheet (Instagram / WhatsApp / Messages on mobile)
+  - **Save** — fetches the OG PNG and triggers a local `fitto-week-<username>.png` download (lets users post manually to Instagram Stories or Feed)
+  - **Copy** — clipboard fallback for desktop
+- 🔄 **Metadata cleaned** — removed `fc:frame`, `fc:miniapp`, `fc:frame:image`, `fc:frame:button:*`. Added `twitter:creator: @FittoApp`, `twitter:site: @FittoApp`, `og:image:type: image/png`, and `robots: noindex,nofollow` (personal share pages shouldn't be indexed).
+
+### Phase 4 — P1 data persistence fixes (April 29)
+- ✅ **AddExerciseDialog reconciled**: now also captures `duration_minutes` and `calories_burned`. Auto-estimates kcal-burn from `MET × user_weight_kg × duration_minutes / 60` using a Compendium-of-Physical-Activities MET table per preset (running 8.3, cycling 7.5, HIIT 9.0, strength compound 6.0, walking 4.3, etc). User can override the estimate manually. The strength-only path still works (sets/reps/weight pass through). `useSupabase.addExercise()` reducer signature extended to take optional `durationMinutes` and `caloriesBurned`.
+- ✅ **WaterTracking → Supabase**: rewrote to read/write `water_logs` (user_id + date unique), upserting on every glass tap with a 350 ms debounce. Also auto-migrates legacy `localStorage[fitto_water_glasses]` to the DB on first authenticated visit and clears it. Adds Supabase Realtime subscription so multi-device users stay in sync. Falls back to localStorage when logged out.
+- ✅ **BodyMeasurements built out**: replaced the "Coming Soon" placeholder with a full feature — header card with latest snapshot (Weight / Body fat / Muscle / Waist) + delta-vs-previous indicator, an "Add measurement" inline form (Date, Weight*, Body fat %, Muscle, Waist, Hips, Chest, Arms, Legs, Notes), realtime-subscribed history list with delete buttons. Persists to `body_measurements` table.
+
+### Phase 5 — Referral loop (April 29)
+- 🎁 **DB**: Added `user_profiles.referrer_user_id` (UUID, FK auth.users, ON DELETE SET NULL) + index. New patch file `/app/migration_002_referral.sql` so existing databases can pick up just the delta.
+- 🎁 **Trigger upgrade** (`handle_new_user`) — reads `raw_user_meta_data->>'referrer_user_id'`, validates that it's a real UUID for an existing user (rejects self-referral), stores it on the new profile, and bumps **both** users' `subscriptions.ai_requests_limit` by 70 (≈ 1 week of AI Coach quota at 10/day default).
+- 🎁 **Signup form** (`auth/signup/page.tsx`) — `useSearchParams` captures `?ref=<uuid>` from the URL on mount, validates with a UUID regex, persists in `sessionStorage` (so opening signup in a new tab from somewhere else still credits the referrer), and passes `referrer_user_id` inside `supabase.auth.signUp({ options: { data } })`. New gift-banner UI ("🎁 You've been invited!") shown when a referral is detected, in TR + EN.
+- 🎁 **Share landing CTA updated**: the primary "Open Fitto" button now goes to `/auth/signup?ref=<userId>&utm_source=share&utm_medium=week_card` instead of plain `/`. Verified in tests: Supabase persists `referrer_user_id` in `user_metadata` for the new account; once `migration_002_referral.sql` is applied the trigger does the credit bumping atomically.
 
 ## 7. Verified end-to-end (against live Supabase)
 - ✅ Signup → 200 with access_token

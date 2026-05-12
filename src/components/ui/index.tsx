@@ -17,7 +17,7 @@ export { ContextMenu, ContextMenuCheckboxItem, ContextMenuContent, ContextMenuGr
 export { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "./dialog"
 export { Drawer, DrawerClose, DrawerContent, DrawerDescription, DrawerFooter, DrawerHeader, DrawerTitle, DrawerTrigger } from "./drawer"
 export { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuLabel, DropdownMenuPortal, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuSeparator, DropdownMenuShortcut, DropdownMenuSub, DropdownMenuSubContent, DropdownMenuSubTrigger, DropdownMenuTrigger } from "./dropdown-menu"
-export { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage, useFormField } from "./form"
+// Form primitives removed — react-hook-form / zod are no longer dependencies.
 export { HoverCard, HoverCardContent, HoverCardTrigger } from "./hover-card"
 export { InputOTP, InputOTPGroup, InputOTPSlot } from "./input-otp"
 export { Input } from "./input"

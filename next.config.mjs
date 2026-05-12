@@ -1,7 +1,9 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
     typescript: {
-        ignoreBuildErrors: true,
+        // Strict mode: surface type errors at build time instead of masking them.
+        // Flip back to `true` only as a temporary escape hatch.
+        ignoreBuildErrors: false,
     },
     images: {
         remotePatterns: [

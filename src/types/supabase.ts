@@ -31,7 +31,7 @@ export type SubscriptionStatus = 'active' | 'inactive' | 'canceled' | 'expired';
 // CORE ROWS
 // ============================================================================
 
-export interface UserProfile {
+export type UserProfile = {
   id: string;
   user_id: string;
   full_name: string | null;
@@ -47,7 +47,7 @@ export interface UserProfile {
   updated_at: string;
 }
 
-export interface UserGoals {
+export type UserGoals = {
   id: string;
   user_id: string;
   goal_type: GoalType | string | null;
@@ -60,7 +60,7 @@ export interface UserGoals {
   updated_at: string;
 }
 
-export interface FoodItem {
+export type FoodItem = {
   id: string;
   user_id: string;
   meal_name: string;
@@ -77,7 +77,7 @@ export interface FoodItem {
 // Alias kept for legacy imports
 export type Meal = FoodItem;
 
-export interface ExerciseLog {
+export type ExerciseLog = {
   id: string;
   user_id: string;
   exercise_name: string;
@@ -91,7 +91,7 @@ export interface ExerciseLog {
   created_at: string;
 }
 
-export interface FoodDatabaseItem {
+export type FoodDatabaseItem = {
   id: string;
   name: string;
   name_tr: string;
@@ -110,7 +110,7 @@ export interface FoodDatabaseItem {
   created_at: string;
 }
 
-export interface DailySummary {
+export type DailySummary = {
   id: string;
   user_id: string;
   date: string;
@@ -127,7 +127,7 @@ export interface DailySummary {
   updated_at: string;
 }
 
-export interface WaterLog {
+export type WaterLog = {
   id: string;
   user_id: string;
   date: string;
@@ -136,7 +136,7 @@ export interface WaterLog {
   updated_at: string;
 }
 
-export interface BodyMeasurement {
+export type BodyMeasurement = {
   id: string;
   user_id: string;
   date: string;
@@ -152,7 +152,7 @@ export interface BodyMeasurement {
   created_at: string;
 }
 
-export interface AIMessage {
+export type AIMessage = {
   id: string;
   user_id: string;
   role: 'user' | 'assistant' | 'system' | string;
@@ -160,7 +160,7 @@ export interface AIMessage {
   created_at: string;
 }
 
-export interface Subscription {
+export type Subscription = {
   user_id: string;
   plan_type: PlanType | string;
   status: SubscriptionStatus | string;
@@ -173,7 +173,7 @@ export interface Subscription {
   updated_at: string;
 }
 
-export interface TrialStatus {
+export type TrialStatus = {
   user_id: string;
   is_trial_active: boolean;
   trial_started_at: string | null;
@@ -191,6 +191,18 @@ export type DailyLog = FoodItem;
 // ============================================================================
 // DATABASE TYPE (used by createClient<Database>)
 // ============================================================================
+// NOTE: supabase-js v2.87+ requires `Relationships: GenericRelationship[]` on
+// every table for the generic table inference to work — otherwise every
+// `.from('x')` call collapses to `never`. We keep it as a mutable empty
+// array type since we don't model foreign-key relationships here.
+type Rel = {
+  foreignKeyName: string;
+  columns: string[];
+  isOneToOne?: boolean;
+  referencedRelation: string;
+  referencedColumns: string[];
+}[];
+
 export interface Database {
   public: {
     Tables: {
@@ -202,6 +214,7 @@ export interface Database {
           updated_at?: string;
         };
         Update: Partial<Omit<UserProfile, 'id' | 'user_id' | 'created_at'>>;
+        Relationships: Rel;
       };
       user_goals: {
         Row: UserGoals;
@@ -211,6 +224,7 @@ export interface Database {
           updated_at?: string;
         };
         Update: Partial<Omit<UserGoals, 'id' | 'user_id' | 'created_at'>>;
+        Relationships: Rel;
       };
       meals: {
         Row: FoodItem;
@@ -219,6 +233,7 @@ export interface Database {
           created_at?: string;
         };
         Update: Partial<Omit<FoodItem, 'id' | 'user_id' | 'created_at'>>;
+        Relationships: Rel;
       };
       exercises: {
         Row: ExerciseLog;
@@ -227,6 +242,7 @@ export interface Database {
           created_at?: string;
         };
         Update: Partial<Omit<ExerciseLog, 'id' | 'user_id' | 'created_at'>>;
+        Relationships: Rel;
       };
       food_database: {
         Row: FoodDatabaseItem;
@@ -235,6 +251,7 @@ export interface Database {
           created_at?: string;
         };
         Update: Partial<Omit<FoodDatabaseItem, 'id' | 'created_at'>>;
+        Relationships: Rel;
       };
       daily_summaries: {
         Row: DailySummary;
@@ -244,6 +261,7 @@ export interface Database {
           updated_at?: string;
         };
         Update: Partial<Omit<DailySummary, 'id' | 'user_id' | 'created_at'>>;
+        Relationships: Rel;
       };
       water_logs: {
         Row: WaterLog;
@@ -252,6 +270,7 @@ export interface Database {
           updated_at?: string;
         };
         Update: Partial<Omit<WaterLog, 'id' | 'user_id'>>;
+        Relationships: Rel;
       };
       body_measurements: {
         Row: BodyMeasurement;
@@ -260,6 +279,7 @@ export interface Database {
           created_at?: string;
         };
         Update: Partial<Omit<BodyMeasurement, 'id' | 'user_id' | 'created_at'>>;
+        Relationships: Rel;
       };
       ai_messages: {
         Row: AIMessage;
@@ -268,6 +288,7 @@ export interface Database {
           created_at?: string;
         };
         Update: Partial<Omit<AIMessage, 'id' | 'user_id' | 'created_at'>>;
+        Relationships: Rel;
       };
       subscriptions: {
         Row: Subscription;
@@ -276,6 +297,7 @@ export interface Database {
           updated_at?: string;
         };
         Update: Partial<Omit<Subscription, 'user_id' | 'created_at'>>;
+        Relationships: Rel;
       };
       trial_status: {
         Row: TrialStatus;
@@ -284,7 +306,10 @@ export interface Database {
           updated_at?: string;
         };
         Update: Partial<Omit<TrialStatus, 'user_id' | 'created_at'>>;
+        Relationships: Rel;
       };
     };
+    Views: { [_ in never]: never };
+    Functions: { [_ in never]: never };
   };
 }

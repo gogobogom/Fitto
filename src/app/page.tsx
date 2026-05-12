@@ -24,7 +24,7 @@ export default function Home() {
     return true;
   });
 
-  // --- Your existing hook (may depend on SpacetimeDB)
+  // --- Your existing hook (Supabase-backed)
   const {
     connected,
     identity,
@@ -171,7 +171,7 @@ export default function Home() {
         return;
       }
 
-      // --- Supabase-only path (SpacetimeDB-free)
+      // --- Supabase direct upsert path (used when the `connection` reducers are unavailable)
       const proteinTarget = weightKg * 2;
       const carbsTarget = (dailyCalorieTarget * 0.5) / 4;
       const fatTarget = (dailyCalorieTarget * 0.3) / 9;

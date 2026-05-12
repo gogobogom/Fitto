@@ -104,8 +104,9 @@ export function useFontLoading() {
             for (let j = 0; j < rules.length; j++) {
               const rule = rules[j];
               if (rule instanceof CSSFontFaceRule) {
-                if (!rule.style.fontDisplay) {
-                  rule.style.fontDisplay = 'swap';
+                const ruleStyle = rule.style as CSSStyleDeclaration & { fontDisplay?: string };
+                if (!ruleStyle.fontDisplay) {
+                  ruleStyle.fontDisplay = 'swap';
                 }
               }
             }

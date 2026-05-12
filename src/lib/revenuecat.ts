@@ -57,7 +57,7 @@ export class RevenueCatService {
 
     try {
       const { customerInfo, productIdentifier } = await Purchases.purchasePackage({ aPackage: pkg });
-      return { customerInfo, productIdentifier };
+      return { customerInfo: customerInfo as CustomerInfo, productIdentifier };
     } catch (error: any) {
       if (error.userCancelled) {
         console.log('User cancelled purchase');
@@ -74,7 +74,7 @@ export class RevenueCatService {
     }
 
     try {
-      const customerInfo = await Purchases.getCustomerInfo();
+      const { customerInfo } = await Purchases.getCustomerInfo();
       return customerInfo;
     } catch (error) {
       console.error('Error getting customer info:', error);

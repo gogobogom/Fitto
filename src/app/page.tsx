@@ -309,7 +309,7 @@ export default function Home() {
         connection={connection}
         foodItems={foodItems}
       />
-      <AICoachOrchestrator identity={effectiveIdentity} />
+      <AICoachOrchestrator userId={effectiveIdentity} />
     </>
   );
 }

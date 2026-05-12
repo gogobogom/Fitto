@@ -178,11 +178,11 @@ export function ProgressiveImage({
   className,
   ...props
 }: ProgressiveImageProps) {
-  const [currentSrc, setCurrentSrc] = useState(lowQualitySrc || '');
+  const [currentSrc, setCurrentSrc] = useState<string>(lowQualitySrc || '');
   const [isHighQualityLoaded, setIsHighQualityLoaded] = useState(false);
   
   useEffect(() => {
-    if (!src) return;
+    if (!src || typeof src !== 'string') return;
     
     const img = new Image();
     img.src = src;

@@ -120,7 +120,6 @@ export default function TariflerPage(): React.JSX.Element {
         <div className="bg-white/90 backdrop-blur-sm rounded-lg border-2 border-orange-200 shadow-lg p-6">
           <RecipeSearch 
             userId={userId} 
-            connection={connection}
           />
         </div>
 

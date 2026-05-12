@@ -10,7 +10,7 @@ type BatchedRequest<T> = {
   timestamp: number;
 };
 
-type BatchProcessor<K, V> = (keys: K[]) => Promise<Map<K, V>>;
+type BatchProcessorFn<K, V> = (keys: K[]) => Promise<Map<K, V>>;
 
 // Request deduplication
 class RequestDeduplicator {
@@ -379,3 +379,4 @@ export {
   PriorityRequestQueue,
   RequestCoalescer,
 };
+export type { BatchProcessorFn };

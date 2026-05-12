@@ -6,7 +6,7 @@ import { Progress } from './ui/progress';
 import { Badge } from './ui/badge';
 import { TrendingUp, TrendingDown, Target, Calendar } from 'lucide-react';
 import { useLanguage } from '@/contexts/LanguageContext';
-import { useSupabase } from '@/hooks/useSupabase';
+import { supabase } from '@/lib/supabase/client';
 import type { Database } from '@/types/supabase';
 
 type UserGoal = Database['public']['Tables']['user_goals']['Row'];
@@ -26,7 +26,6 @@ interface NutrientTrend {
 
 export function DetailedReportCard({ userGoals, period }: DetailedReportCardProps) {
   const { t } = useLanguage();
-  const { supabase } = useSupabase();
   const daysToAnalyze = period === 'week' ? 7 : 30;
 
   const [nutritionAnalysis, setNutritionAnalysis] = useState({
@@ -38,8 +37,6 @@ export function DetailedReportCard({ userGoals, period }: DetailedReportCardProp
   });
 
   useEffect(() => {
-    if (!supabase) return;
-
     const fetchNutritionData = async (): Promise<void> => {
       try {
         const today = new Date();
@@ -137,7 +134,7 @@ export function DetailedReportCard({ userGoals, period }: DetailedReportCardProp
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [supabase, daysToAnalyze]);
+  }, [daysToAnalyze]);
 
   const nutrientTrends = useMemo((): NutrientTrend[] => {
     if (!userGoals) return [];

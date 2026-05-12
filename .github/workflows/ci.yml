@@ -1,0 +1,51 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# Cancel in-progress runs when a new commit is pushed to the same PR/branch.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: Typecheck & Lint
+    runs-on: ubuntu-latest
+
+    env:
+      # Skip husky's `prepare` hook on CI — hooks are pointless inside the runner.
+      HUSKY: 0
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          # @capacitor/cli@8 requires Node >=22; matches the project's runtime.
+          node-version: '22'
+          cache: 'yarn'
+
+      - name: Cache node_modules
+        id: cache-node-modules
+        uses: actions/cache@v4
+        with:
+          path: node_modules
+          key: ${{ runner.os }}-node22-modules-${{ hashFiles('yarn.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-node22-modules-
+
+      - name: Install dependencies
+        if: steps.cache-node-modules.outputs.cache-hit != 'true'
+        run: yarn install --frozen-lockfile
+
+      - name: Typecheck (tsc --noEmit)
+        run: yarn typecheck
+
+      - name: Lint
+        run: yarn lint

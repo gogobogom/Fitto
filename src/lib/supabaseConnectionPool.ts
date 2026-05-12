@@ -385,7 +385,7 @@ export class OptimizedQueryBuilder {
     const { returning = true } = options;
 
     return this.connectionManager.executeRequest(async () => {
-      const query = this.client.from(table).insert(data);
+      const query = this.client.from(table).insert(data as never);
       
       if (returning) {
         const { data: result, error } = await query.select();
@@ -411,7 +411,7 @@ export class OptimizedQueryBuilder {
     const { returning = true } = options;
 
     return this.connectionManager.executeRequest(async () => {
-      let query = this.client.from(table).update(data);
+      let query = this.client.from(table).update(data as never);
 
       Object.entries(filter).forEach(([key, value]) => {
         query = query.eq(key, value);

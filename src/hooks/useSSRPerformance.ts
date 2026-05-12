@@ -234,6 +234,8 @@ export function useConnectionAwareLoading(): {
       connection?: {
         effectiveType?: string;
         saveData?: boolean;
+        addEventListener?: (type: string, listener: () => void) => void;
+        removeEventListener?: (type: string, listener: () => void) => void;
       };
     }).connection;
 

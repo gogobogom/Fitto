@@ -187,7 +187,7 @@ export function MorePage({ userId }: MorePageProps) {
     return (
       <div className="space-y-6 pb-40">
         <DoodleHeader onBack={() => setCurrentView('menu')} title={t('more.mealHistory')} subtitle={t('more.mealHistoryDesc')} emoji="📜" />
-        <MealHistory connection={null as any} currentDate={{year: 2025, month: 1, day: 1}} />
+        <MealHistory connection={null as any} currentDate="2025-01-01" />
       </div>
     );
   }
@@ -295,7 +295,7 @@ export function MorePage({ userId }: MorePageProps) {
     return (
       <div className="space-y-6 pb-40">
         <DoodleHeader onBack={() => setCurrentView('menu')} title={t('more.favoriteFoods')} subtitle={t('more.favoriteFoodsDesc')} emoji="⭐" />
-        <FavoriteFoods connection={null as any} />
+        <FavoriteFoods />
       </div>
     );
   }

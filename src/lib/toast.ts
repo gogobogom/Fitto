@@ -27,7 +27,7 @@ export const toast = {
       } : undefined,
       cancel: options?.cancel ? {
         label: options.cancel.label,
-        onClick: options.cancel.onClick,
+        onClick: options.cancel.onClick ?? (() => {}),
       } : undefined,
     })
   },

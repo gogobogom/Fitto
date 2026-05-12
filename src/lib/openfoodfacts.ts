@@ -155,5 +155,5 @@ export function normalizeProduct(product: NormalizedFood | OpenFoodFactsProduct)
 export async function searchAndNormalize(query: string, page: number = 1): Promise<NormalizedFood[]> {
   const results = await searchFoodProducts(query, page);
   // Results are already normalized by the API route
-  return results.products;
+  return results.products as unknown as NormalizedFood[];
 }

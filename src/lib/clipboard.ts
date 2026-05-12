@@ -48,7 +48,6 @@ export async function copyToClipboard(text: string): Promise<boolean> {
     let ok = false;
     try {
       // execCommand is deprecated but still the only viable fallback.
-      // eslint-disable-next-line @typescript-eslint/no-deprecated
       ok = document.execCommand('copy');
     } catch {
       ok = false;

@@ -92,11 +92,11 @@ export function useForm<T extends Record<string, unknown>>(
 
   // Validate single field
   const validateField = useCallback((field: keyof T): string | null => {
-    const fieldValidators = validators[field];
+    const fieldValidators = (validators as Partial<Record<keyof T, Validator<T[keyof T]>[]>>)[field];
     if (!fieldValidators) return null;
 
     for (const validator of fieldValidators) {
-      const error = validator(values[field], values as Record<string, unknown>);
+      const error = validator((values as T)[field], values as Record<string, unknown>);
       if (error) return error;
     }
     return null;

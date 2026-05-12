@@ -1,0 +1,4 @@
+#!/usr/bin/env sh
+# Pre-push hook: run TypeScript type-check against the whole project to
+# prevent regressions from accumulating (the "200+ TS error" tech debt).
+npx tsc --noEmit

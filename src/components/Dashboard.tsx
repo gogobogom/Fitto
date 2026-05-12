@@ -63,7 +63,7 @@ export function Dashboard({ identity, userProfile, userGoals, dailySummary, conn
               connection={connection}
               onAddMeal={handleAddClick}
               onAddExercise={() => setShowAddExercise(true)}
-              onNavigate={setActiveTab}
+              onNavigate={(tab: string) => setActiveTab(tab as typeof activeTab)}
             />
           ) : (
             <DashboardNew
@@ -128,8 +128,8 @@ export function Dashboard({ identity, userProfile, userGoals, dailySummary, conn
       </div>
 
       <BottomNav
-        activeTab={activeTab}
-        onTabChange={setActiveTab}
+        activeTab={activeTab as 'dashboard' | 'stats' | 'recipes' | 'more'}
+        onTabChange={(tab) => setActiveTab(tab)}
         onAddClick={handleAddClick}
       />
 

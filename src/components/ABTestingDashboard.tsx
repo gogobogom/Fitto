@@ -188,7 +188,7 @@ function ExperimentCard({ experiment, isExpanded, onToggle }: ExperimentCardProp
               <VariantResultDisplay
                 key={variant.id}
                 experimentId={experiment.id}
-                variant={variant}
+                variant={variant as unknown as Variant}
                 isControl={variant.isControl ?? false}
                 controlRate={variant.isControl ? undefined : controlRate}
               />

@@ -5,10 +5,11 @@
 
 import dynamic from 'next/dynamic';
 import type { ComponentType } from 'react';
+import * as React from 'react';
 
 export interface LoaderOptions {
   /** Show loading state */
-  loading?: ComponentType;
+  loading?: (loadingProps: { error?: Error | null; isLoading?: boolean; pastDelay?: boolean; retry?: () => void; timedOut?: boolean }) => React.ReactNode;
   /** Show error state */
   error?: ComponentType<{ error: Error }>;
   /** SSR enabled */

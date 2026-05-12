@@ -74,7 +74,7 @@ export function useThrottledCallback<TArgs extends unknown[], TReturn>(
  * Previous value hook - tracks previous value for comparison
  */
 export function usePrevious<T>(value: T): T | undefined {
-  const ref = useRef<T>();
+  const ref = useRef<T | undefined>(undefined);
 
   useEffect(() => {
     ref.current = value;
@@ -140,7 +140,7 @@ export function useWhyDidYouRender<T extends Record<string, unknown>>(
   componentName: string,
   props: T
 ): void {
-  const previousProps = useRef<T>();
+  const previousProps = useRef<T | undefined>(undefined);
 
   useEffect(() => {
     if (previousProps.current && process.env.NODE_ENV === 'development') {
@@ -244,7 +244,7 @@ export function usePerformanceMeasure(): {
  */
 export function useRAF(callback: (deltaTime: number) => void, isActive = true): void {
   const callbackRef = useRef(callback);
-  const frameRef = useRef<number>();
+  const frameRef = useRef<number | undefined>(undefined);
   const lastTimeRef = useRef<number>(0);
 
   useEffect(() => {

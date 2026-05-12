@@ -672,7 +672,7 @@ export function SettingsPage({ connection, onBack }: SettingsPageProps) {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <SubscriptionManager connection={connection} />
+              <SubscriptionManager connection={connection as SupabaseConnection} />
             </CardContent>
           </Card>
         </div>

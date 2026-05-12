@@ -232,7 +232,7 @@ export async function initWebVitals(): Promise<void> {
   if (typeof window === 'undefined') return;
   
   try {
-    const { onLCP, onFID, onCLS, onTTFB, onINP, onFCP } = await import('web-vitals');
+    const { onLCP, onCLS, onTTFB, onINP, onFCP } = await import('web-vitals');
     
     const handleMetric = (metric: { name: string; value: number; delta: number; id: string; navigationType: string }) => {
       reportWebVitals({
@@ -246,7 +246,6 @@ export async function initWebVitals(): Promise<void> {
     };
     
     onLCP(handleMetric);
-    onFID(handleMetric);
     onCLS(handleMetric);
     onTTFB(handleMetric);
     onINP(handleMetric);

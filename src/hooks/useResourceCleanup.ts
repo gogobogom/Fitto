@@ -232,7 +232,7 @@ export function useSafeAsync<T>(): {
   data: T | null;
 } {
   const isMounted = useMountedState();
-  const [state, setState] = useRef({
+  const state = useRef({
     isLoading: false,
     error: null as Error | null,
     data: null as T | null,

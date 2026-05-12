@@ -232,7 +232,7 @@ export async function fetchWithRetry(
   const { 
     retries = 3, 
     retryDelay = 1000,
-    shouldRetry = (r) => r.status >= 500 
+    shouldRetry = (r: Response) => r.status >= 500 
   } = options || {};
 
   let lastError: Error | null = null;

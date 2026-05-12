@@ -223,7 +223,7 @@ export function useWebVitalMetric(metricName: MetricName): {
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
-    const observerCallbacks: Record<MetricName, () => void> = {
+    const observerCallbacks: Record<MetricName, () => (() => void) | void> = {
       FCP: () => {
         const entries = performance.getEntriesByType('paint');
         const fcp = entries.find(e => e.name === 'first-contentful-paint');

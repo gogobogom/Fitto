@@ -419,7 +419,7 @@ export function precomputeData<T, R>(
   const result = { ...data } as T & Record<string, R>;
   
   computations.forEach(({ key, compute }) => {
-    result[key as keyof typeof result] = compute(data) as (T & Record<string, R>)[keyof T & Record<string, R>];
+    (result as Record<string, R>)[key] = compute(data);
   });
   
   return result;

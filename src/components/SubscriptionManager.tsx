@@ -208,7 +208,7 @@ export function SubscriptionManager({ connection }: SubscriptionManagerProps) {
         const { error } = await connection.supabase
           .from('subscriptions')
           .upsert({
-            identity: connection.userId,
+            user_id: connection.userId,
             plan_type: planType as 'free' | 'premium' | 'trial',
             status: 'active',
             started_at: now.toISOString(),
@@ -216,7 +216,7 @@ export function SubscriptionManager({ connection }: SubscriptionManagerProps) {
             auto_renew: true,
             ai_requests_used: 0,
             ai_requests_limit: planType === 'premium' ? 1000 : 10,
-          }, { onConflict: 'identity' });
+          }, { onConflict: 'user_id' });
 
         if (error) {
           console.error('Upgrade error:', error);

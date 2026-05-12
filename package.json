@@ -5,12 +5,19 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "build:mobile": "MOBILE_BUILD=true next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "typecheck": "tsc --noEmit",
+    "prepare": "husky",
+    "sync:android": "yarn build:mobile && npx cap sync android",
+    "sync:ios": "yarn build:mobile && npx cap sync ios"
   },
   "dependencies": {
+    "@capacitor/android": "^8.0.0",
     "@capacitor/cli": "^8.0.0",
     "@capacitor/core": "^8.0.0",
+    "@capacitor/ios": "^8.0.0",
     "@radix-ui/react-accordion": "^1.2.10",
     "@radix-ui/react-alert-dialog": "^1.1.13",
     "@radix-ui/react-aspect-ratio": "^1.1.6",
@@ -64,8 +71,14 @@
     "@types/node": "20.17.47",
     "@types/react": "19.1.8",
     "@types/react-dom": "19.1.6",
+    "@typescript-eslint/eslint-plugin": "^7",
+    "@typescript-eslint/parser": "^7",
     "autoprefixer": "^10.4.21",
     "depcheck": "^1.4.7",
+    "eslint": "^8",
+    "eslint-config-next": "15.3.8",
+    "husky": "^9.1.7",
+    "lint-staged": "^17.0.4",
     "postcss": "^8",
     "tailwindcss": "^3.4.1",
     "typescript": "5.8.3"
@@ -73,5 +86,10 @@
   "overrides": {
     "@types/react": "19.1.8",
     "@types/react-dom": "19.1.6"
+  },
+  "lint-staged": {
+    "*.{js,jsx,ts,tsx}": [
+      "next lint --fix --file"
+    ]
   }
 }

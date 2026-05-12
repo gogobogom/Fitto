@@ -31,8 +31,8 @@ function checkPassiveSupport(): boolean {
         return true;
       }
     };
-    window.addEventListener('test', null as unknown as EventListener, options);
-    window.removeEventListener('test', null as unknown as EventListener, options);
+    window.addEventListener('test' as keyof WindowEventMap, null as unknown as EventListener, options as AddEventListenerOptions);
+    window.removeEventListener('test' as keyof WindowEventMap, null as unknown as EventListener, options as AddEventListenerOptions);
   } catch {
     passiveSupported = false;
   }

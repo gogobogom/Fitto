@@ -51,7 +51,15 @@ async function handleRequest(request: Request) {
 
   if (contentType.includes('multipart/form-data')) {
     const proxyRequest = await request.formData()
-    parsed = {
+    const parsedForm: {
+      protocol: string
+      origin: string
+      path: string
+      method: string
+      headers: Record<string, unknown>
+      body: FormData
+      [key: string]: unknown
+    } = {
       protocol: '',
       origin: '',
       path: '',
@@ -63,13 +71,13 @@ async function handleRequest(request: Request) {
     for (const [key, value] of proxyRequest.entries()) {
       if (key.startsWith('body[') && key.endsWith(']')) {
         const fieldName = key.slice(5, -1)
-        parsed.body.append(
+        parsedForm.body.append(
           fieldName,
           replaceMaskedWordsWithSecrets(value, wordMap),
         )
       } else if (key === 'headers') {
         try {
-          parsed.headers = replaceMaskedWordsWithSecrets(
+          parsedForm.headers = replaceMaskedWordsWithSecrets(
             JSON.parse(String(value)),
             wordMap,
           )
@@ -82,13 +90,14 @@ async function handleRequest(request: Request) {
           )
         }
       } else {
-        parsed[key] = replaceMaskedWordsWithSecrets(value, wordMap)
+        parsedForm[key] = replaceMaskedWordsWithSecrets(value, wordMap)
       }
     }
+    parsed = parsedForm
   } else if (contentType.includes('application/json')) {
     try {
       parsed = await request.json()
-    } catch (error) {
+    } catch {
       return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 })
     }
 
@@ -132,8 +141,9 @@ async function handleRequest(request: Request) {
     const json = await response.json()
     return NextResponse.json(json)
   } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
     return NextResponse.json(
-      { error: 'Failed to fetch external API', details: error.message },
+      { error: 'Failed to fetch external API', details: message },
       { status: 500 },
     )
   }

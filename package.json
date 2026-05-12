@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "build:mobile": "MOBILE_BUILD=true next build",
+    "build:mobile": "node scripts/build-mobile.js",
     "start": "next start",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",

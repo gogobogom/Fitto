@@ -7,6 +7,7 @@ import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import type { Gender, ActivityLevel, GoalType } from '@/types/supabase';
+import { calculateDailyCalorieTarget } from '@/lib/calorieCalc';
 import { DoodleImage } from './DoodleImage';
 import { doodleAssets } from '@/lib/doodleAssets';
 import { useLanguage } from '@/contexts/LanguageContext';
@@ -41,35 +42,12 @@ export function Onboarding({ identity, onComplete }: OnboardingProps) {
     const height = parseFloat(heightCm);
     const targetWeight = parseFloat(targetWeightKg) || weight;
 
-    // Already using correct types from Supabase
-    const genderEnum = gender;
-    const activityEnum = activityLevel;
-    const goalEnum = goalType;
+    const dailyCalories = calculateDailyCalorieTarget(
+      { age: ageNum, weightKg: weight, heightCm: height, gender, activityLevel },
+      goalType,
+    );
 
-    let bmr = 0;
-    if (gender === 'male') {
-      bmr = 10 * weight + 6.25 * height - 5 * ageNum + 5;
-    } else {
-      bmr = 10 * weight + 6.25 * height - 5 * ageNum - 161;
-    }
-
-    const activityMultipliers: Record<typeof activityLevel, number> = {
-      sedentary: 1.2,
-      lightlyActive: 1.375,
-      moderatelyActive: 1.55,
-      veryActive: 1.725,
-      extraActive: 1.9,
-    };
-
-    let dailyCalories = Math.round(bmr * activityMultipliers[activityLevel]);
-
-    if (goalType === 'loseWeight') {
-      dailyCalories -= 500;
-    } else if (goalType === 'gainWeight' || goalType === 'buildMuscle') {
-      dailyCalories += 500;
-    }
-
-    onComplete(username, ageNum, weight, height, genderEnum, activityEnum, goalEnum, targetWeight, dailyCalories);
+    onComplete(username, ageNum, weight, height, gender, activityLevel, goalType, targetWeight, dailyCalories);
   };
 
   return (

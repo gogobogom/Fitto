@@ -8,6 +8,8 @@ import { Label } from './ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Calculator, Activity, Target } from 'lucide-react';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { calculateBMR, calculateTDEE } from '@/lib/calorieCalc';
+import type { ActivityLevel, Gender } from '@/types/supabase';
 
 interface CalculatorResult {
   bmi?: number;
@@ -23,8 +25,8 @@ export function HealthCalculators() {
   const [weight, setWeight] = useState<string>('');
   const [height, setHeight] = useState<string>('');
   const [age, setAge] = useState<string>('');
-  const [gender, setGender] = useState<string>('male');
-  const [activityLevel, setActivityLevel] = useState<string>('moderate');
+  const [gender, setGender] = useState<Gender>('male');
+  const [activityLevel, setActivityLevel] = useState<ActivityLevel>('moderatelyActive');
   const [result, setResult] = useState<CalculatorResult | null>(null);
 
   const calculate = () => {
@@ -51,23 +53,9 @@ export function HealthCalculators() {
          bmi < 30 ? 'Overweight' :
          'Obese');
 
-    // BMR Calculation (Mifflin-St Jeor)
-    let bmr: number;
-    if (gender === 'male') {
-      bmr = 10 * w + 6.25 * h - 5 * a + 5;
-    } else {
-      bmr = 10 * w + 6.25 * h - 5 * a - 161;
-    }
-
-    // TDEE Calculation
-    const activityMultipliers: Record<string, number> = {
-      sedentary: 1.2,
-      light: 1.375,
-      moderate: 1.55,
-      active: 1.725,
-      veryActive: 1.9,
-    };
-    const tdee = bmr * activityMultipliers[activityLevel];
+    // BMR / TDEE via the shared calorie helper (Mifflin-St Jeor).
+    const bmr = calculateBMR({ age: a, weightKg: w, heightCm: h, gender });
+    const tdee = calculateTDEE({ age: a, weightKg: w, heightCm: h, gender, activityLevel });
 
     // Ideal Weight Range (based on BMI 18.5-25)
     const idealWeightMin = 18.5 * heightM * heightM;
@@ -131,7 +119,7 @@ export function HealthCalculators() {
             </div>
             <div className="space-y-2">
               <Label htmlFor="gender">{language === 'tr' ? 'Cinsiyet' : 'Gender'}</Label>
-              <Select value={gender} onValueChange={setGender}>
+            <Select value={gender} onValueChange={(v) => setGender(v as Gender)}>
                 <SelectTrigger id="gender">
                   <SelectValue />
                 </SelectTrigger>
@@ -145,16 +133,16 @@ export function HealthCalculators() {
 
           <div className="space-y-2">
             <Label htmlFor="activity">{language === 'tr' ? 'Aktivite Seviyesi' : 'Activity Level'}</Label>
-            <Select value={activityLevel} onValueChange={setActivityLevel}>
+            <Select value={activityLevel} onValueChange={(v) => setActivityLevel(v as ActivityLevel)}>
               <SelectTrigger id="activity">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="sedentary">{language === 'tr' ? 'Hareketsiz (egzersiz yok)' : 'Sedentary (no exercise)'}</SelectItem>
-                <SelectItem value="light">{language === 'tr' ? 'Az Aktif (hafif egzersiz)' : 'Lightly Active (light exercise)'}</SelectItem>
-                <SelectItem value="moderate">{language === 'tr' ? 'Orta Aktif (orta egzersiz)' : 'Moderately Active (moderate exercise)'}</SelectItem>
-                <SelectItem value="active">{language === 'tr' ? 'Çok Aktif (yoğun egzersiz)' : 'Very Active (intense exercise)'}</SelectItem>
-                <SelectItem value="veryActive">{language === 'tr' ? 'Ekstra Aktif (çok yoğun)' : 'Extra Active (very intense)'}</SelectItem>
+                <SelectItem value="lightlyActive">{language === 'tr' ? 'Az Aktif (hafif egzersiz)' : 'Lightly Active (light exercise)'}</SelectItem>
+                <SelectItem value="moderatelyActive">{language === 'tr' ? 'Orta Aktif (orta egzersiz)' : 'Moderately Active (moderate exercise)'}</SelectItem>
+                <SelectItem value="veryActive">{language === 'tr' ? 'Çok Aktif (yoğun egzersiz)' : 'Very Active (intense exercise)'}</SelectItem>
+                <SelectItem value="extraActive">{language === 'tr' ? 'Ekstra Aktif (çok yoğun)' : 'Extra Active (very intense)'}</SelectItem>
               </SelectContent>
             </Select>
           </div>

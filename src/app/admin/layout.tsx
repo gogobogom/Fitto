@@ -25,7 +25,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/lib/supabase/client';
 import { AdminSessionManager, checkAdminStatus } from '@/lib/adminAuth';
-import type { AdminRole } from '@/types/supabase';
+import type { AdminRole } from '@/lib/adminAuth';
 
 const navigationGroups = [
   {

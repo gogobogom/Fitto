@@ -29,7 +29,7 @@ interface RecipeDetailProps {
   onClose: () => void;
 }
 
-export default function RecipeDetail({ recipeId, userId, onClose }: RecipeDetailProps): JSX.Element {
+export default function RecipeDetail({ recipeId, userId, onClose }: RecipeDetailProps): React.JSX.Element {
   const { t, language } = useLanguage();
   const [recipe, setRecipe] = useState<RecipeDetailData | null>(null);
   const [loading, setLoading] = useState<boolean>(true);

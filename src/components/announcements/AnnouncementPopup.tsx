@@ -27,7 +27,7 @@ interface AnnouncementPopupProps {
   announcements: Announcement[];
 }
 
-export default function AnnouncementPopup({ announcements }: AnnouncementPopupProps): JSX.Element | null {
+export default function AnnouncementPopup({ announcements }: AnnouncementPopupProps): React.JSX.Element | null {
   const [currentAnnouncement, setCurrentAnnouncement] = useState<Announcement | null>(null);
   const [dismissed, setDismissed] = useState<string[]>([]);
 

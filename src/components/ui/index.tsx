@@ -6,7 +6,7 @@ export { Avatar, AvatarFallback, AvatarImage } from "./avatar"
 export { Badge, badgeVariants } from "./badge"
 export { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbPage, BreadcrumbSeparator } from "./breadcrumb"
 export { Button, buttonVariants } from "./button"
-export { Calendar } from "./calendar"
+// Calendar primitive removed — react-day-picker / date-fns are no longer deps.
 export { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "./card"
 export { Carousel, CarouselContent, CarouselItem, CarouselNext, CarouselPrevious } from "./carousel"
 export { ChartContainer, ChartTooltip, ChartTooltipContent, ChartLegend, ChartLegendContent, ChartStyle } from "./chart"

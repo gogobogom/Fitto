@@ -6,6 +6,7 @@
 
 'use client';
 
+import React from 'react';
 import { AlertTriangle } from 'lucide-react';
 
 interface MaintenanceBannerProps {
@@ -16,7 +17,7 @@ interface MaintenanceBannerProps {
 export default function MaintenanceBanner({ 
   message = 'Sistemde bakım çalışması yapılıyor',
   estimatedEnd 
-}: MaintenanceBannerProps): JSX.Element {
+}: MaintenanceBannerProps): React.JSX.Element {
   return (
     <div className="fixed top-0 left-0 right-0 z-50 bg-yellow-500 text-black py-3 px-4 shadow-lg">
       <div className="container mx-auto flex items-center justify-center gap-3">

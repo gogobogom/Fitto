@@ -203,109 +203,82 @@ type Rel = {
   referencedColumns: string[];
 }[];
 
+// Insert / Update shape used uniformly across tables.
+//   • `Insert` mirrors the Supabase CLI-generated convention: nullable / defaulted
+//     columns are optional. We keep all columns optional and let Postgres
+//     enforce NOT NULL constraints at runtime — that matches the existing
+//     callsites that upsert with partial data + onConflict.
+//   • `Update` is always `Partial<Row>` minus immutable identity columns.
+type InsertOf<T> = Partial<T>;
+type UpdateOf<T, K extends keyof T = never> = Partial<Omit<T, K>>;
+
 export interface Database {
   public: {
     Tables: {
       user_profiles: {
         Row: UserProfile;
-        Insert: Omit<UserProfile, 'id' | 'created_at' | 'updated_at'> & {
-          id?: string;
-          created_at?: string;
-          updated_at?: string;
-        };
-        Update: Partial<Omit<UserProfile, 'id' | 'user_id' | 'created_at'>>;
+        Insert: InsertOf<UserProfile>;
+        Update: UpdateOf<UserProfile, 'id' | 'user_id' | 'created_at'>;
         Relationships: Rel;
       };
       user_goals: {
         Row: UserGoals;
-        Insert: Omit<UserGoals, 'id' | 'created_at' | 'updated_at'> & {
-          id?: string;
-          created_at?: string;
-          updated_at?: string;
-        };
-        Update: Partial<Omit<UserGoals, 'id' | 'user_id' | 'created_at'>>;
+        Insert: InsertOf<UserGoals>;
+        Update: UpdateOf<UserGoals, 'id' | 'user_id' | 'created_at'>;
         Relationships: Rel;
       };
       meals: {
         Row: FoodItem;
-        Insert: Omit<FoodItem, 'id' | 'created_at'> & {
-          id?: string;
-          created_at?: string;
-        };
-        Update: Partial<Omit<FoodItem, 'id' | 'user_id' | 'created_at'>>;
+        Insert: InsertOf<FoodItem>;
+        Update: UpdateOf<FoodItem, 'id' | 'user_id' | 'created_at'>;
         Relationships: Rel;
       };
       exercises: {
         Row: ExerciseLog;
-        Insert: Omit<ExerciseLog, 'id' | 'created_at'> & {
-          id?: string;
-          created_at?: string;
-        };
-        Update: Partial<Omit<ExerciseLog, 'id' | 'user_id' | 'created_at'>>;
+        Insert: InsertOf<ExerciseLog>;
+        Update: UpdateOf<ExerciseLog, 'id' | 'user_id' | 'created_at'>;
         Relationships: Rel;
       };
       food_database: {
         Row: FoodDatabaseItem;
-        Insert: Omit<FoodDatabaseItem, 'id' | 'created_at'> & {
-          id?: string;
-          created_at?: string;
-        };
-        Update: Partial<Omit<FoodDatabaseItem, 'id' | 'created_at'>>;
+        Insert: InsertOf<FoodDatabaseItem>;
+        Update: UpdateOf<FoodDatabaseItem, 'id' | 'created_at'>;
         Relationships: Rel;
       };
       daily_summaries: {
         Row: DailySummary;
-        Insert: Omit<DailySummary, 'id' | 'created_at' | 'updated_at'> & {
-          id?: string;
-          created_at?: string;
-          updated_at?: string;
-        };
-        Update: Partial<Omit<DailySummary, 'id' | 'user_id' | 'created_at'>>;
+        Insert: InsertOf<DailySummary>;
+        Update: UpdateOf<DailySummary, 'id' | 'user_id' | 'created_at'>;
         Relationships: Rel;
       };
       water_logs: {
         Row: WaterLog;
-        Insert: Omit<WaterLog, 'id' | 'updated_at'> & {
-          id?: string;
-          updated_at?: string;
-        };
-        Update: Partial<Omit<WaterLog, 'id' | 'user_id'>>;
+        Insert: InsertOf<WaterLog>;
+        Update: UpdateOf<WaterLog, 'id' | 'user_id'>;
         Relationships: Rel;
       };
       body_measurements: {
         Row: BodyMeasurement;
-        Insert: Omit<BodyMeasurement, 'id' | 'created_at'> & {
-          id?: string;
-          created_at?: string;
-        };
-        Update: Partial<Omit<BodyMeasurement, 'id' | 'user_id' | 'created_at'>>;
+        Insert: InsertOf<BodyMeasurement>;
+        Update: UpdateOf<BodyMeasurement, 'id' | 'user_id' | 'created_at'>;
         Relationships: Rel;
       };
       ai_messages: {
         Row: AIMessage;
-        Insert: Omit<AIMessage, 'id' | 'created_at'> & {
-          id?: string;
-          created_at?: string;
-        };
-        Update: Partial<Omit<AIMessage, 'id' | 'user_id' | 'created_at'>>;
+        Insert: InsertOf<AIMessage>;
+        Update: UpdateOf<AIMessage, 'id' | 'user_id' | 'created_at'>;
         Relationships: Rel;
       };
       subscriptions: {
         Row: Subscription;
-        Insert: Omit<Subscription, 'created_at' | 'updated_at'> & {
-          created_at?: string;
-          updated_at?: string;
-        };
-        Update: Partial<Omit<Subscription, 'user_id' | 'created_at'>>;
+        Insert: InsertOf<Subscription>;
+        Update: UpdateOf<Subscription, 'user_id' | 'created_at'>;
         Relationships: Rel;
       };
       trial_status: {
         Row: TrialStatus;
-        Insert: Omit<TrialStatus, 'created_at' | 'updated_at'> & {
-          created_at?: string;
-          updated_at?: string;
-        };
-        Update: Partial<Omit<TrialStatus, 'user_id' | 'created_at'>>;
+        Insert: InsertOf<TrialStatus>;
+        Update: UpdateOf<TrialStatus, 'user_id' | 'created_at'>;
         Relationships: Rel;
       };
     };

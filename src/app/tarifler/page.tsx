@@ -28,7 +28,7 @@ import { DoodleHeader } from '@/components/DoodleHeader';
 import { useSupabase } from '@/hooks/useSupabase';
 import { useLanguage } from '@/contexts/LanguageContext';
 
-export default function TariflerPage(): JSX.Element {
+export default function TariflerPage(): React.JSX.Element {
   const router = useRouter();
   const { t } = useLanguage();
   const { connection, isConnecting, connectionError } = useSupabase();

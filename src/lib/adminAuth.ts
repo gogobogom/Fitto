@@ -8,7 +8,15 @@
  */
 
 import { supabase } from '@/lib/supabase/client';
-import type { AdminRole, AdminStatus } from '@/types/supabase';
+
+// Admin role hierarchy (kept local — admin tables aren't in the typed Database)
+export type AdminRole = 'super_admin' | 'admin' | 'moderator';
+export type AdminStatus = 'active' | 'inactive' | 'suspended';
+
+// The `admin_users` and `admin_audit_logs` tables exist in Postgres but
+// aren't modelled in src/types/supabase.ts. Use a loose-typed handle for them.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const sb = supabase as any;
 
 // Admin user interface
 export interface AdminUser {
@@ -44,12 +52,12 @@ export async function checkAdminStatus(): Promise<AdminUser | null> {
     }
 
     // Check admin_users table
-    const { data: adminData, error } = await supabase
+    const { data: adminData, error } = await sb
       .from('admin_users')
       .select('identity, role, status')
       .eq('identity', session.user.id)
       .eq('status', 'active')
-      .single();
+      .maybeSingle();
 
     if (error || !adminData) {
       return null;
@@ -160,7 +168,7 @@ export async function logAdminAction(
   metadata: Record<string, unknown> = {}
 ): Promise<void> {
   try {
-    await supabase.from('admin_audit_logs').insert({
+    await sb.from('admin_audit_logs').insert({
       admin_identity: adminId,
       action_type: actionType,
       target_identity: targetId,

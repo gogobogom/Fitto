@@ -20,7 +20,7 @@ interface MaintenanceMode {
   affectedSections?: string[];
 }
 
-export default function MaintenanceWrapper({ children }: { children: React.ReactNode }): JSX.Element {
+export default function MaintenanceWrapper({ children }: { children: React.ReactNode }): React.JSX.Element {
   const [maintenanceMode, setMaintenanceMode] = useState<MaintenanceMode | null>(null);
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [loading, setLoading] = useState(true);

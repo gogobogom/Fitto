@@ -25,7 +25,7 @@ interface AICoachOrchestratorV3Props {
   onClose: () => void;
 }
 
-export function AICoachOrchestratorV3({ onClose }: AICoachOrchestratorV3Props): JSX.Element {
+export function AICoachOrchestratorV3({ onClose }: AICoachOrchestratorV3Props): React.JSX.Element {
   const { language } = useLanguage();
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState<string>('');

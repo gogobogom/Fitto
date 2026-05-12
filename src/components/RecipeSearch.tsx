@@ -21,7 +21,7 @@ interface RecipeSearchProps {
   userId: string;
 }
 
-export default function RecipeSearch({ userId }: RecipeSearchProps): JSX.Element {
+export default function RecipeSearch({ userId }: RecipeSearchProps): React.JSX.Element {
   const { t, language } = useLanguage();
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [recipes, setRecipes] = useState<TheMealDBRecipe[]>([]);

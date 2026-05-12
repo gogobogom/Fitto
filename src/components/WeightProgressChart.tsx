@@ -26,12 +26,30 @@ export function WeightProgressChart({ userId }: WeightProgressChartProps) {
   const [showGoalLine, setShowGoalLine] = useState<boolean>(true);
 
   // TODO: Implement body measurements with Supabase
-  const goalWeight = null;
+  const goalWeight: number | null = null;
   const allWeightData: ChartDataPoint[] = [];
 
   const weightData: ChartDataPoint[] = [];
 
   const hasData = false;
+
+  // Placeholder stats — only referenced inside the dead `hasData` branch below.
+  // Once the body_measurements query is wired up, replace with real aggregates.
+  const stats = {
+    currentWeight: 0,
+    startWeight: 0,
+    totalChange: 0,
+    changePercentage: 0,
+    averageWeeklyChange: 0,
+    minWeight: 0,
+    maxWeight: 0,
+    goalRemaining: 0,
+    goalProgress: 0,
+    trend: 'stable' as 'down' | 'up' | 'stable',
+  };
+
+  // `userId` will be used once we wire up the Supabase query.
+  void userId;
 
   return (
     <div className="space-y-4">

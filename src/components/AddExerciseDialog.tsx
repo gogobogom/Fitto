@@ -7,7 +7,6 @@ import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Flame, Clock } from 'lucide-react';
 import type { SupabaseConnection } from '@/hooks/useSupabase';
-import { useSupabase } from '@/hooks/useSupabase';
 import { useLanguage } from '@/contexts/LanguageContext';
 
 interface AddExerciseDialogProps {
@@ -56,10 +55,33 @@ const estimateKcal = (met: number, userWeightKg: number, durationMin: number): n
 
 export function AddExerciseDialog({ connection, currentDate: _currentDate, onClose }: AddExerciseDialogProps) {
   const { language } = useLanguage();
-  const { userProfile } = useSupabase();
   const t = (tr: string, en: string): string => (language === 'tr' ? tr : en);
 
-  const userWeight = Number(userProfile?.weight_kg ?? DEFAULT_USER_WEIGHT);
+  // Pull the user's current weight from the (already-loaded) connection-derived
+  // profile rather than spinning up a second `useSupabase()` instance — which
+  // would create duplicate auth listeners and realtime subscriptions.
+  const [userWeight, setUserWeight] = useState<number>(DEFAULT_USER_WEIGHT);
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const { data } = await connection.supabase
+          .from('user_profiles')
+          .select('weight_kg')
+          .eq('user_id', connection.userId)
+          .maybeSingle();
+        if (!cancelled && data?.weight_kg != null) {
+          const w = Number(data.weight_kg);
+          if (Number.isFinite(w) && w > 0) setUserWeight(w);
+        }
+      } catch {
+        /* keep default */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [connection.supabase, connection.userId]);
 
   const [selectedExercise, setSelectedExercise] = useState<string>('');
   const [customExercise, setCustomExercise] = useState<string>('');

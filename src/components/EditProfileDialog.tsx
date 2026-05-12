@@ -56,7 +56,7 @@ export function EditProfileDialog({ open, onOpenChange, userId, onProfileUpdated
         .from('user_profiles')
         .select('*')
         .eq('user_id', userId)
-        .single();
+        .maybeSingle();
 
       if (error) {
         console.error('Profil yükleme hatası:', error);
@@ -177,7 +177,7 @@ export function EditProfileDialog({ open, onOpenChange, userId, onProfileUpdated
         .from('user_goals')
         .select('goal_type')
         .eq('user_id', userId)
-        .single();
+        .maybeSingle();
 
       if (goalsData && goalsData.goal_type) {
         // Recalculate calories based on updated profile

@@ -163,24 +163,28 @@ export const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta'
  * Throws error if critical variables are missing
  */
 export function validateEnvironment(): void {
+  const missing: string[] = [];
+
+  // Critical Supabase vars — without these the entire data layer is broken.
+  // The browser client reads these from process.env directly (not from `env`),
+  // so we check process.env here.
+  if (!process.env.NEXT_PUBLIC_SUPABASE_URL) missing.push('NEXT_PUBLIC_SUPABASE_URL');
+  if (!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) missing.push('NEXT_PUBLIC_SUPABASE_ANON_KEY');
+
+  // Optional but required for non-default behaviour
   const required: Array<keyof typeof env> = [
     'USDA_API_KEY',
   ];
-  
-  const missing: string[] = [];
-  
   for (const key of required) {
-    if (!env[key]) {
-      missing.push(key);
-    }
+    if (!env[key]) missing.push(key as string);
   }
-  
+
   if (missing.length > 0) {
     const error = `Missing required environment variables: ${missing.join(', ')}`;
     console.error(`[ENV] ${error}`);
     throw new Error(error);
   }
-  
+
   console.log('[ENV] ✅ All environment variables validated');
 }
 

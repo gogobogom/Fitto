@@ -274,8 +274,8 @@ export function EnhancedDashboard({
         }
       }
     }
-    // Save to storage for weekly chart
-    if (total > 0 && currentDate) {
+    // Save to storage for weekly chart (always write — even 0 — so deletions clear stale cache)
+    if (currentDate) {
       simpleStorage.setItem(`calories_${currentDate}`, total.toString());
     }
     return total;
@@ -461,12 +461,14 @@ export function EnhancedDashboard({
   }, [language, calorieProgress, caloriesBurned, waterGlasses]);
 
   // Achievements - memoized
+  // NOTE: "streak" tracking is not yet wired to real data; set earned strictly
+  // from observable metrics so we never show a false-positive trophy.
   const achievements = useMemo((): Achievement[] => [
     { 
       id: 1, 
       name: language === 'tr' ? '7 Gün Sürekliliği' : '7 Day Streak', 
       icon: '🔥', 
-      earned: true,
+      earned: weeklyData.filter((d) => d.calories > 0).length >= 7,
       description: language === 'tr' ? '7 gün üst üste kayıt yaptın!' : 'You logged for 7 consecutive days!'
     },
     { 
@@ -483,7 +485,7 @@ export function EnhancedDashboard({
       earned: waterGlasses >= 8,
       description: language === 'tr' ? 'Günlük su hedefine ulaştın!' : 'You reached your daily water goal!'
     },
-  ], [language, weeklyExerciseTotal, waterGlasses]);
+  ], [language, weeklyExerciseTotal, waterGlasses, weeklyData]);
 
   // Water update handler - memoized
   const handleWaterUpdate = useCallback((glasses: number) => {

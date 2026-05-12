@@ -88,10 +88,8 @@ export function MealTrackingPage({ connection, currentDate, onBack, foodItems, u
   const getMealsForType = (mealType: string): FoodItem[] => {
     const meals: FoodItem[] = [];
     for (const food of foodItems.values()) {
-      // Check if meal is for today and matches meal type
-      // Cast food to any to access meal_type property that exists in database but not in FoodItem type
-      const mealData = food as FoodItem & { meal_type?: string };
-      if (food.date === currentDate && mealData.meal_type === mealType) {
+      // `meal_type` is part of FoodItem (see /types/supabase.ts)
+      if (food.date === currentDate && food.meal_type === mealType) {
         meals.push(food);
       }
     }

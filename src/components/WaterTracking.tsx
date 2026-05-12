@@ -12,13 +12,29 @@ const STORAGE_KEY = 'fitto_water_glasses';
 
 const todayStr = (): string => new Date().toISOString().split('T')[0];
 
-export function WaterTracking() {
+interface WaterTrackingProps {
+  /** Optional initial value (e.g. parent-held mirror) — only used before the DB row loads */
+  initialGlasses?: number;
+  /** Notified whenever the glass count changes locally so the parent can stay in sync */
+  onUpdate?: (glasses: number) => void;
+}
+
+export function WaterTracking({ initialGlasses, onUpdate }: WaterTrackingProps = {}) {
   const { t } = useLanguage();
-  const [glasses, setGlasses] = useState<number>(0);
+  const [glasses, setGlasses] = useState<number>(
+    typeof initialGlasses === 'number' && initialGlasses >= 0 && initialGlasses <= MAX_GLASSES
+      ? initialGlasses
+      : 0,
+  );
   const [animatingGlass, setAnimatingGlass] = useState<number | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
   const [hydrated, setHydrated] = useState<boolean>(false);
   const debounceRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Keep parent in sync whenever the local count changes
+  useEffect(() => {
+    onUpdate?.(glasses);
+  }, [glasses, onUpdate]);
 
   // Read auth + load today's water row from Supabase (or fall back to localStorage)
   useEffect(() => {

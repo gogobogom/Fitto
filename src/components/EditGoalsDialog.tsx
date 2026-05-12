@@ -55,9 +55,9 @@ export function EditGoalsDialog({ open, onOpenChange, userId, currentWeight, onG
         .from('user_goals')
         .select('*')
         .eq('user_id', userId)
-        .single();
+        .maybeSingle();
 
-      if (error && error.code !== 'PGRST116') {
+      if (error) {
         console.error('Hedefler yükleme hatası:', error);
         toast.error('Hedefler yüklenemedi');
         return;

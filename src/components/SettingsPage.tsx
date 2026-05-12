@@ -96,9 +96,9 @@ export function SettingsPage({ connection, onBack }: SettingsPageProps) {
         .from('user_profiles')
         .select('*')
         .eq('user_id', user.id)
-        .single();
+        .maybeSingle();
 
-      if (profileError && profileError.code !== 'PGRST116') {
+      if (profileError) {
         console.error('Profile load error:', profileError);
       } else if (profileData) {
         setUsername(profileData.username || profileData.full_name || '');
@@ -112,9 +112,9 @@ export function SettingsPage({ connection, onBack }: SettingsPageProps) {
         .from('user_goals')
         .select('*')
         .eq('user_id', user.id)
-        .single();
+        .maybeSingle();
 
-      if (goalsError && goalsError.code !== 'PGRST116') {
+      if (goalsError) {
         console.error('Goals load error:', goalsError);
       } else if (goalsData) {
         setTargetWeightKg(goalsData.target_weight_kg?.toString() || '');

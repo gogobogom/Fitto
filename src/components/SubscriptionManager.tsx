@@ -12,6 +12,7 @@ import { toast } from 'sonner';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { RevenueCatService } from '@/lib/revenuecat';
 import { Capacitor } from '@capacitor/core';
+import { broadcastSubscriptionChange } from '@/contexts/SubscriptionContext';
 import type { PurchasesOfferings, PurchasesPackage } from '@revenuecat/purchases-capacitor';
 
 interface SubscriptionManagerProps {
@@ -53,18 +54,43 @@ export function SubscriptionManager({ connection }: SubscriptionManagerProps) {
   const [offerings, setOfferings] = useState<PurchasesOfferings | null>(null);
   const { t, language } = useLanguage();
 
-  // Mirror premium status into localStorage under the key `useAIAccess`
-  // reads from (`fitto_subscription`). This lets the AI Health Coach gate
-  // stay accurate even when the backend (Supabase / RevenueCat) is
-  // unreachable on a subsequent launch.
+  // Mirror premium status into localStorage under the key `useAIAccess` and
+  // `SubscriptionContext` read from (`fitto_subscription`). This lets the AI
+  // Health Coach gate stay accurate even when the backend (Supabase /
+  // RevenueCat) is unreachable on a subsequent launch. The broadcast also
+  // fires an in-process event so any open `useSubscription` hook updates
+  // without waiting for the next `storage` event.
   const persistPremiumStatus = (isActive: boolean, expiresAt: string | null): void => {
+    broadcastSubscriptionChange(isActive, expiresAt);
+  };
+
+  // Best-effort one-way sync from RevenueCat → Supabase `subscriptions`
+  // table so server-side checks (admin dashboard, future cron) can read a
+  // single source of truth. Failures are swallowed — the local snapshot
+  // (`fitto_subscription`) remains authoritative for the client.
+  const syncPremiumToSupabase = async (
+    isActive: boolean,
+    expiresAt: string | null,
+  ): Promise<void> => {
+    if (!connection?.supabase || !connection.userId) return;
     try {
-      localStorage.setItem(
-        'fitto_subscription',
-        JSON.stringify({ isActive, expiresAt }),
-      );
+      await connection.supabase
+        .from('subscriptions')
+        .upsert(
+          {
+            user_id: connection.userId,
+            plan_type: isActive ? 'premium' : 'free',
+            status: isActive ? 'active' : 'inactive',
+            started_at: new Date().toISOString(),
+            expires_at: expiresAt,
+            auto_renew: isActive,
+            ai_requests_used: 0,
+            ai_requests_limit: isActive ? 1000 : 10,
+          },
+          { onConflict: 'user_id' },
+        );
     } catch (err) {
-      console.error('persistPremiumStatus failed:', err);
+      console.error('[Subscription] Supabase sync failed:', err);
     }
   };
 
@@ -115,16 +141,25 @@ export function SubscriptionManager({ connection }: SubscriptionManagerProps) {
                expiresAtIso = endDate.toISOString();
             }
             persistPremiumStatus(true, expiresAtIso);
+            void syncPremiumToSupabase(true, expiresAtIso);
           } else {
             persistPremiumStatus(false, null);
+            void syncPremiumToSupabase(false, null);
           }
 
-          // Fetch Offerings
-          const fetchedOfferings = await RevenueCatService.getOfferings();
-          if (fetchedOfferings) {
-            setOfferings(fetchedOfferings);
+          // Fetch Offerings (independent try/catch so a getOfferings
+          // failure doesn't poison the entitlement state above).
+          try {
+            const fetchedOfferings = await RevenueCatService.getOfferings();
+            if (fetchedOfferings) {
+              setOfferings(fetchedOfferings);
+            }
+          } catch (offeringsError) {
+            console.error('RevenueCat getOfferings error:', offeringsError);
           }
         } catch (error) {
+          // SDK init failure (e.g. RevenueCat unavailable). Keep the UI
+          // responsive by leaving `currentPlan='free'` and continuing.
           console.error('RevenueCat load error:', error);
         }
       } 
@@ -210,7 +245,9 @@ export function SubscriptionManager({ connection }: SubscriptionManagerProps) {
         if (result?.customerInfo.entitlements.active['premium'] || result?.customerInfo.activeSubscriptions.length) {
           // Success!
            setCurrentPlan('premium');
-           persistPremiumStatus(true, result?.customerInfo.entitlements.active['premium']?.expirationDate ?? null);
+           const rcExpiresAt = result?.customerInfo.entitlements.active['premium']?.expirationDate ?? null;
+           persistPremiumStatus(true, rcExpiresAt);
+           void syncPremiumToSupabase(true, rcExpiresAt);
            toast.success(t('subscription.upgradeSuccess'));
            
            // Optionally sync to Supabase here if you want web to know about mobile sub

@@ -9,6 +9,7 @@ import { MacroDonutChart } from './MacroDonutChart';
 import { WeightProgressChart } from './WeightProgressChart';
 import { AchievementBadges } from './AchievementBadges';
 import { DetailedReportCard } from './DetailedReportCard';
+import { PremiumGate } from './PremiumGate';
 import { Calendar, TrendingUp, Award, BarChart3 } from 'lucide-react';
 interface StatsPageProps {
   userId: string;
@@ -104,8 +105,13 @@ export function StatsPage({ userId }: StatsPageProps) {
         totalExercises={totalExercises}
       />
 
-      {/* Weight Progress */}
-      <WeightProgressChart userId={userId} />
+      {/* Weight Progress (Premium-gated advanced view) */}
+      <PremiumGate
+        featureName="Detaylı Kilo Takibi"
+        description={undefined}
+      >
+        <WeightProgressChart userId={userId} />
+      </PremiumGate>
     </div>
   );
 }

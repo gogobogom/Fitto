@@ -129,9 +129,26 @@ export function useAIAccess(connection: AIConnection = {}): AIAccessResult {
       }
     }, 60000);
 
+    // Re-evaluate immediately whenever the subscription snapshot changes
+    // (same tab via custom event; other tabs via the `storage` event).
+    const onChange = (): void => {
+      if (isMounted) calculateAccess();
+    };
+    const onStorage = (e: StorageEvent): void => {
+      if (e.key === STORAGE_KEY_SUBSCRIPTION && isMounted) calculateAccess();
+    };
+    if (typeof window !== 'undefined') {
+      window.addEventListener('fitto:subscription-changed', onChange);
+      window.addEventListener('storage', onStorage);
+    }
+
     return () => {
       isMounted = false;
       clearInterval(intervalId);
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('fitto:subscription-changed', onChange);
+        window.removeEventListener('storage', onStorage);
+      }
     };
   }, [calculateAccess]);
 

@@ -8,6 +8,7 @@ import { cookies } from "next/headers";
 import { ResponseLogger } from "@/components/response-logger";
 import { ReadyNotifier } from "@/components/ready-notifier";
 import { LanguageProvider } from "@/contexts/LanguageContext";
+import { SubscriptionProvider } from "@/contexts/SubscriptionContext";
 import { Toaster } from "@/components/ui/sonner";
 import MaintenanceWrapper from "@/components/MaintenanceWrapper";
 import { PWAProvider } from "@/components/pwa";
@@ -72,9 +73,11 @@ export default async function RootLayout({
         <RevenueCatInitializer />
 
         <LanguageProvider>
-          <MaintenanceWrapper>
-            <PWAProvider>{children}</PWAProvider>
-          </MaintenanceWrapper>
+          <SubscriptionProvider>
+            <MaintenanceWrapper>
+              <PWAProvider>{children}</PWAProvider>
+            </MaintenanceWrapper>
+          </SubscriptionProvider>
         </LanguageProvider>
 
         <Toaster />

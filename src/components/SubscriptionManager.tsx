@@ -53,6 +53,21 @@ export function SubscriptionManager({ connection }: SubscriptionManagerProps) {
   const [offerings, setOfferings] = useState<PurchasesOfferings | null>(null);
   const { t, language } = useLanguage();
 
+  // Mirror premium status into localStorage under the key `useAIAccess`
+  // reads from (`fitto_subscription`). This lets the AI Health Coach gate
+  // stay accurate even when the backend (Supabase / RevenueCat) is
+  // unreachable on a subsequent launch.
+  const persistPremiumStatus = (isActive: boolean, expiresAt: string | null): void => {
+    try {
+      localStorage.setItem(
+        'fitto_subscription',
+        JSON.stringify({ isActive, expiresAt }),
+      );
+    } catch (err) {
+      console.error('persistPremiumStatus failed:', err);
+    }
+  };
+
   // Set currency based on GEOLOCATION (not language) for pricing security
   useEffect(() => {
     const detectCurrency = async () => {
@@ -92,11 +107,16 @@ export function SubscriptionManager({ connection }: SubscriptionManagerProps) {
             
             // Try to get expiration date from entitlement
             const entitlement = Object.values(customerInfo.entitlements.active)[0];
+            let expiresAtIso: string | null = null;
             if (entitlement && entitlement.expirationDate) {
                const endDate = new Date(entitlement.expirationDate);
                const dateLocale = language === 'tr' ? 'tr-TR' : 'en-US';
                setSubscriptionEndDate(endDate.toLocaleDateString(dateLocale));
+               expiresAtIso = endDate.toISOString();
             }
+            persistPremiumStatus(true, expiresAtIso);
+          } else {
+            persistPremiumStatus(false, null);
           }
 
           // Fetch Offerings
@@ -138,6 +158,10 @@ export function SubscriptionManager({ connection }: SubscriptionManagerProps) {
               const dateLocale = language === 'tr' ? 'tr-TR' : 'en-US';
               setSubscriptionEndDate(endDate.toLocaleDateString(dateLocale));
             }
+            persistPremiumStatus(
+              data.plan_type === 'premium' && data.status === 'active',
+              data.expires_at ?? null,
+            );
           }
         } catch (error: unknown) {
           const errorMsg = error instanceof Error ? error.message : 'Unknown error';
@@ -186,6 +210,7 @@ export function SubscriptionManager({ connection }: SubscriptionManagerProps) {
         if (result?.customerInfo.entitlements.active['premium'] || result?.customerInfo.activeSubscriptions.length) {
           // Success!
            setCurrentPlan('premium');
+           persistPremiumStatus(true, result?.customerInfo.entitlements.active['premium']?.expirationDate ?? null);
            toast.success(t('subscription.upgradeSuccess'));
            
            // Optionally sync to Supabase here if you want web to know about mobile sub
@@ -225,6 +250,7 @@ export function SubscriptionManager({ connection }: SubscriptionManagerProps) {
         }
 
         setCurrentPlan(planType);
+        persistPremiumStatus(planType === 'premium', expiresAt);
         if (expiresAt) {
           const endDateObj = new Date(expiresAt);
           const dateLocale = language === 'tr' ? 'tr-TR' : 'en-US';

@@ -55,7 +55,7 @@ export function BodyMeasurements({ connection }: BodyMeasurementsProps) {
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async (): Promise<void> => {
-    if (!connection.userId) return;
+    if (!connection?.userId) return;
     setLoading(true);
     setError(null);
     const { data, error: err } = await supabase
@@ -71,11 +71,13 @@ export function BodyMeasurements({ connection }: BodyMeasurementsProps) {
       setItems((data ?? []) as BodyMeasurement[]);
     }
     setLoading(false);
-  }, [connection.userId]);
+  }, [connection?.userId]);
 
   useEffect(() => {
+    // Bail out until the Supabase connection is ready (has a userId).
+    if (!connection) return;
+    if (!connection?.userId) return;
     void load();
-    if (!connection.userId) return;
     const channel = supabase
       .channel(`body_measurements_${connection.userId}`)
       .on(
@@ -92,7 +94,7 @@ export function BodyMeasurements({ connection }: BodyMeasurementsProps) {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [connection.userId, load]);
+  }, [connection, connection?.userId, load]);
 
   const handleChange = (key: keyof FormState, value: string): void => {
     setForm((prev) => ({ ...prev, [key]: value }));

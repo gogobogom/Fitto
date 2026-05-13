@@ -22,6 +22,7 @@ export default function AdminDashboardPage() {
     const fetchStats = async () => {
       try {
         const response = await fetch('/api/admin/dashboard/stats');
+        if (!response.ok) throw new Error('Network response was not ok');
         const data = await response.json();
         setStats(data);
       } catch (error) {

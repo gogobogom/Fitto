@@ -407,6 +407,7 @@ const translations: Record<Language, Record<string, any>> = {
     more: {
       title: "Daha Fazla",
       description: "Tarifler, geçmiş ve özel gıdalar",
+      connectionPreparing: "Bağlantı hazırlanıyor...",
       tipsGuide: "İpuçları & Rehber",
       tipsGuideDesc: "Sağlık, beslenme ve diet ipuçları",
       history: "Geçmiş",
@@ -590,6 +591,7 @@ const translations: Record<Language, Record<string, any>> = {
     settings: {
       title: "Ayarlar",
       description: "Hesap, bildirimler ve tercihler",
+      notificationPermission: "Bildirim İzni",
       account: "Hesap",
       notifications: "Bildirimler",
       units: "Birimler",
@@ -1187,6 +1189,7 @@ const translations: Record<Language, Record<string, any>> = {
     more: {
       title: "More",
       description: "Recipes, history, and custom foods",
+      connectionPreparing: "Preparing connection...",
       tipsGuide: "Tips & Guide",
       tipsGuideDesc: "Health, nutrition, and diet tips",
       history: "History",
@@ -1370,6 +1373,7 @@ const translations: Record<Language, Record<string, any>> = {
     settings: {
       title: "Settings",
       description: "Account, notifications, and preferences",
+      notificationPermission: "Notification Permission",
       account: "Account",
       notifications: "Notifications",
       units: "Units",

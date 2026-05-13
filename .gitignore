@@ -1,5 +1,7 @@
 node_modules/
 .next/
+out/
+.mobile-build-stash/
 .env.local
 next.log
 -e 

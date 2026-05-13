@@ -1,12 +1,14 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Button } from './ui/button';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine, Line, ComposedChart } from 'recharts';
 import { TrendingDown, TrendingUp, Target, Calendar, Minus } from 'lucide-react';
 import { doodleCharacters } from '@/lib/doodleAssets';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { supabase } from '@/lib/supabase/client';
+import type { BodyMeasurement } from '@/types/supabase';
 
 interface WeightProgressChartProps {
   userId: string;
@@ -24,32 +26,117 @@ export function WeightProgressChart({ userId }: WeightProgressChartProps) {
   const { t } = useLanguage();
   const [timeRange, setTimeRange] = useState<TimeRange>('30d');
   const [showGoalLine, setShowGoalLine] = useState<boolean>(true);
+  const [measurements, setMeasurements] = useState<BodyMeasurement[]>([]);
+  const [goalWeight, setGoalWeight] = useState<number | null>(null);
 
-  // TODO: Implement body measurements with Supabase
-  const goalWeight: number | null = null;
-  const allWeightData: ChartDataPoint[] = [];
+  // Load weight history from `body_measurements` (silently tolerate a
+  // missing table — placeholder state below still renders correctly).
+  useEffect(() => {
+    if (!userId) return;
+    let cancelled = false;
+    (async () => {
+      const { data, error } = await supabase
+        .from('body_measurements')
+        .select('id,user_id,date,weight,body_fat_percentage,muscle_mass,waist,hips,chest,arms,legs,notes,created_at')
+        .eq('user_id', userId)
+        .order('date', { ascending: true })
+        .limit(365);
+      if (cancelled) return;
+      if (!error && Array.isArray(data)) {
+        setMeasurements(data as BodyMeasurement[]);
+      }
+    })();
+    (async () => {
+      const { data, error } = await supabase
+        .from('user_goals')
+        .select('target_weight_kg')
+        .eq('user_id', userId)
+        .maybeSingle();
+      if (cancelled) return;
+      if (!error && data?.target_weight_kg) {
+        setGoalWeight(Number(data.target_weight_kg));
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [userId]);
 
-  const weightData: ChartDataPoint[] = [];
+  // Derived chart points (full history) — used for "all" range & for the
+  // start-weight anchor when computing total change.
+  const allWeightData: ChartDataPoint[] = useMemo(
+    () =>
+      measurements
+        .filter((m) => typeof m.weight === 'number' && !Number.isNaN(m.weight))
+        .map((m) => {
+          const d = new Date(m.date);
+          return {
+            date: d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }),
+            kilo: Number(m.weight),
+            fullDate: d,
+          };
+        })
+        .sort((a, b) => a.fullDate.getTime() - b.fullDate.getTime()),
+    [measurements],
+  );
 
-  const hasData = false;
+  // Window the chart data based on the selected time range.
+  const weightData: ChartDataPoint[] = useMemo(() => {
+    if (timeRange === 'all') return allWeightData;
+    const days = timeRange === '7d' ? 7 : timeRange === '30d' ? 30 : 90;
+    const cutoff = Date.now() - days * 24 * 60 * 60 * 1000;
+    return allWeightData.filter((p) => p.fullDate.getTime() >= cutoff);
+  }, [allWeightData, timeRange]);
 
-  // Placeholder stats — only referenced inside the dead `hasData` branch below.
-  // Once the body_measurements query is wired up, replace with real aggregates.
-  const stats = {
-    currentWeight: 0,
-    startWeight: 0,
-    totalChange: 0,
-    changePercentage: 0,
-    averageWeeklyChange: 0,
-    minWeight: 0,
-    maxWeight: 0,
-    goalRemaining: 0,
-    goalProgress: 0,
-    trend: 'stable' as 'down' | 'up' | 'stable',
-  };
+  const hasData = weightData.length > 0;
 
-  // `userId` will be used once we wire up the Supabase query.
-  void userId;
+  // Real aggregates derived from `body_measurements`.
+  const stats = useMemo(() => {
+    if (!hasData) {
+      return {
+        currentWeight: 0,
+        startWeight: 0,
+        totalChange: 0,
+        changePercentage: 0,
+        averageWeeklyChange: 0,
+        minWeight: 0,
+        maxWeight: 0,
+        goalRemaining: 0,
+        goalProgress: 0,
+        trend: 'stable' as 'down' | 'up' | 'stable',
+      };
+    }
+    const start = weightData[0].kilo;
+    const current = weightData[weightData.length - 1].kilo;
+    const totalChange = current - start;
+    const weights = weightData.map((p) => p.kilo);
+    const minWeight = Math.min(...weights);
+    const maxWeight = Math.max(...weights);
+    const spanDays = Math.max(
+      1,
+      (weightData[weightData.length - 1].fullDate.getTime() - weightData[0].fullDate.getTime()) /
+        (24 * 60 * 60 * 1000),
+    );
+    const averageWeeklyChange = (totalChange / spanDays) * 7;
+    const trend: 'down' | 'up' | 'stable' =
+      Math.abs(totalChange) < 0.1 ? 'stable' : totalChange < 0 ? 'down' : 'up';
+    const goalRemaining = goalWeight != null ? current - goalWeight : 0;
+    const goalProgress =
+      goalWeight != null && start !== goalWeight
+        ? Math.max(0, Math.min(100, ((start - current) / (start - goalWeight)) * 100))
+        : 0;
+    const changePercentage = start !== 0 ? (totalChange / start) * 100 : 0;
+    return {
+      currentWeight: current,
+      startWeight: start,
+      totalChange,
+      changePercentage,
+      averageWeeklyChange,
+      minWeight,
+      maxWeight,
+      goalRemaining,
+      goalProgress,
+      trend,
+    };
+  }, [weightData, hasData, goalWeight]);
 
   return (
     <div className="space-y-4">

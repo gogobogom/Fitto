@@ -40,6 +40,7 @@ export function StatsPage({ userId }: StatsPageProps) {
             src="https://usdozf7pplhxfvrl.public.blob.vercel-storage.com/86857801-8cff-4e58-be6d-2161a1cf559c-RJ8ctzI1m97qoXXUTeP9LoLttbOzh3" 
             alt="İstatistik" 
             className="w-16 h-16 md:w-20 md:h-20 object-contain"
+            onError={(e) => { (e.currentTarget as HTMLImageElement).style.visibility = 'hidden'; }}
           />
         </div>
         <p className="text-sm md:text-base font-doodle-alt text-white/90 drop-shadow">{t('stats.description')}</p>

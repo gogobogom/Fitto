@@ -26,7 +26,8 @@ import { WaterTracking } from './WaterTracking';
 import { ShareWeekButton } from './ShareWeekButton';
 import { simpleStorage } from '@/lib/secureStorage';
 import { useLanguage } from '@/contexts/LanguageContext';
-import type { UserProfile, UserGoals, DailySummary } from '../types/supabase';
+import { calculateDailyCalorieTarget } from '@/lib/calorieCalc';
+import type { ActivityLevel, Gender, GoalType, UserProfile, UserGoals, DailySummary } from '../types/supabase';
 import type { SupabaseConnection } from '../hooks/useSupabase';
 
 interface EnhancedDashboardProps {
@@ -313,11 +314,30 @@ export function EnhancedDashboard({
     };
   }, [connection?.userId, connection?.supabase, currentDate]);
 
-  // Stable calculations
-  const targetCalories = userGoals?.daily_calorie_target || 2000;
+  // Stable calculations.
+  // `targetCalories` prefers the value persisted to `user_goals` during
+  // onboarding; if that is missing but the profile has enough data, we
+  // derive it on the fly using the shared `calorieCalc` helper so the
+  // gauge isn't stuck on the generic 2000 kcal fallback.
+  const targetCalories = useMemo<number>(() => {
+    if (userGoals?.daily_calorie_target) return userGoals.daily_calorie_target;
+    const age = userProfile?.age;
+    const weightKg = userProfile?.weight_kg;
+    const heightCm = userProfile?.height_cm;
+    const gender = userProfile?.gender as Gender | null | undefined;
+    const activityLevel = userProfile?.activity_level as ActivityLevel | null | undefined;
+    if (age && weightKg && heightCm && gender && activityLevel) {
+      const goal = (userGoals?.goal_type as GoalType | null) ?? 'maintainWeight';
+      return calculateDailyCalorieTarget(
+        { age, weightKg, heightCm, gender, activityLevel },
+        goal,
+      );
+    }
+    return 2000;
+  }, [userGoals?.daily_calorie_target, userGoals?.goal_type, userProfile?.age, userProfile?.weight_kg, userProfile?.height_cm, userProfile?.gender, userProfile?.activity_level]);
   const caloriesBurned = (dailySummary?.exercise_calories ?? 0) || todayBurned;
   const netCalories = caloriesConsumed - caloriesBurned;
-  const calorieProgress = (netCalories / targetCalories) * 100;
+  const calorieProgress = targetCalories > 0 ? (netCalories / targetCalories) * 100 : 0;
 
   // Day names - memoized
   const dayNames = useMemo(() => 
@@ -523,6 +543,7 @@ export function EnhancedDashboard({
             alt={language === 'tr' ? 'Profil' : 'Profile'}
             className="h-full w-full object-cover"
             loading="lazy"
+            onError={(e) => { (e.currentTarget as HTMLImageElement).style.visibility = 'hidden'; }}
           />
         </Button>
         

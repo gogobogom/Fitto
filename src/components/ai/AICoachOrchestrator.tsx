@@ -223,53 +223,52 @@ class ConversationalAICoach {
 }
 
 // ============================================================================
-// SERVER-SIDE API CALLER (NO CORS!)
+// MIRA BACKEND CALLER (direct, CORS-enabled on Railway)
 // ============================================================================
+
+const MIRA_ENDPOINT = 'https://ohara-ai-backend-production.up.railway.app/chat';
 
 async function callServerSideAICoach(
   messages: Array<{ role: string; content: string }>,
   language: 'tr' | 'en'
 ): Promise<string> {
+  // `language` retained in the signature for downstream call sites; the
+  // Mira backend currently infers locale from the question itself.
+  void language;
+
   try {
-    console.log('[AI Coach] 🚀 Calling server-side /api/ai-coach endpoint...');
-    
+    console.log('[AI Coach] 🚀 Calling Mira backend directly...');
+
     // Get last user message
     const lastUserMessage = messages[messages.length - 1];
     if (!lastUserMessage || lastUserMessage.role !== 'user') {
       throw new Error('No user message found');
     }
 
-    // Call our server-side API route (NO CORS!)
-    const response = await fetch('/api/ai-coach', {
+    const response = await fetch(MIRA_ENDPOINT, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        message: lastUserMessage.content,
-        context: {
-          language,
-          conversationHistory: messages.slice(-3).map(msg => ({
-            role: msg.role,
-            content: msg.content
-          }))
-        }
-      })
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ question: lastUserMessage.content }),
     });
 
     console.log('[AI Coach] Response status:', response.status);
 
-    if (response.ok) {
-      const data = await response.json();
-      console.log('[AI Coach] ✅ Success! Received response from server');
-      return data.response || '';
-    } else {
-      const errorData = await response.json().catch(() => ({}));
-      console.error('[AI Coach] ❌ Server returned error:', response.status, errorData);
-      throw new Error(`Server error: ${response.status}`);
+    if (!response.ok) {
+      console.error('[AI Coach] ❌ Mira returned error:', response.status);
+      throw new Error(`Network response was not ok (${response.status})`);
     }
+
+    const data = await response.json() as { answer?: string; used_chunks?: unknown };
+
+    // Debug-only: log retrieval chunks, never render them.
+    if (data.used_chunks !== undefined) {
+      console.debug('[AI Coach] used_chunks:', data.used_chunks);
+    }
+
+    console.log('[AI Coach] ✅ Success! Received response from Mira');
+    return typeof data.answer === 'string' ? data.answer : '';
   } catch (error: unknown) {
-    console.error('[AI Coach] ❌ Failed to call /api/ai-coach:', error);
+    console.error('[AI Coach] ❌ Failed to call Mira:', error);
     throw error;
   }
 }

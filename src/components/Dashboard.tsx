@@ -11,6 +11,7 @@ import { BottomNav } from './BottomNav';
 import { MorePage } from './MorePage';
 import { MealTrackingPage } from './MealTrackingPage';
 import { ExerciseTrackingPage } from './ExerciseTrackingPage';
+import { MiraChat } from './MiraChat';
 import { WifiOff } from 'lucide-react';
 import type { UserProfile, UserGoals, DailySummary, FoodItem } from '@/types/supabase';
 import type { SupabaseConnection } from '@/hooks/useSupabase';
@@ -176,6 +177,9 @@ export function Dashboard({ identity, userProfile, userGoals, dailySummary, conn
           onClose={() => setShowAddExercise(false)}
         />
       )}
+
+      {/* Mira AI chatbot — floating launcher, app-wide post-auth */}
+      <MiraChat />
     </div>
   );
 }

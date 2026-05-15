@@ -88,6 +88,9 @@
     "@types/react": "19.1.8",
     "@types/react-dom": "19.1.6"
   },
+  "engines": {
+    "node": ">=22"
+  },
   "lint-staged": {
     "*.{js,jsx,ts,tsx}": [
       "next lint --fix --file"

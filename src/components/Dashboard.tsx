@@ -12,6 +12,7 @@ import { MorePage } from './MorePage';
 import { MealTrackingPage } from './MealTrackingPage';
 import { ExerciseTrackingPage } from './ExerciseTrackingPage';
 import { MiraChat } from './MiraChat';
+import { WellnessDNACard } from './WellnessDNA';
 import { WifiOff } from 'lucide-react';
 import type { UserProfile, UserGoals, DailySummary, FoodItem } from '@/types/supabase';
 import type { SupabaseConnection } from '@/hooks/useSupabase';
@@ -81,6 +82,13 @@ export function Dashboard({ identity, userProfile, userGoals, dailySummary, conn
         </div>
       )}
       <div className="max-w-2xl mx-auto p-4 pt-6 pb-40">
+        {/* Wellness DNA — compact summary at the top of every tab */}
+        {activeTab === 'dashboard' && (
+          <div className="mb-4">
+            <WellnessDNACard userId={userId} />
+          </div>
+        )}
+
         {activeTab === 'dashboard' && (
           useEnhancedDashboard ? (
             <EnhancedDashboard

@@ -43,6 +43,9 @@ export type UserProfile = {
   gender: Gender | string | null;
   activity_level: ActivityLevel | string | null;
   referrer_user_id: string | null;
+  wellness_goal: string | null;
+  dietary_preference: string | null;
+  allergies: string[] | null;
   created_at: string;
   updated_at: string;
 }

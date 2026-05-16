@@ -9,7 +9,11 @@ import { Dashboard } from '../components/Dashboard';
 
 import { Card, CardContent } from '../components/ui/card';
 import { useLanguage } from '@/contexts/LanguageContext';
-import AICoachOrchestrator from '@/components/ai/AICoachOrchestrator';
+// AICoachOrchestrator removed: Mira is now the single AI coach
+// (mounted inside <Dashboard /> via <MiraChat />). The old teal
+// "AI Coach" floating button (which also ran a separate
+// question-spamming mock) was a duplicate entry point and has
+// been retired to enforce one unified Mira experience.
 import type { Gender, ActivityLevel, GoalType } from '@/types/supabase';
 import { supabase } from '@/lib/supabase/client';
 
@@ -309,7 +313,6 @@ export default function Home() {
         connection={connection}
         foodItems={foodItems}
       />
-      <AICoachOrchestrator userId={effectiveIdentity} />
     </>
   );
 }

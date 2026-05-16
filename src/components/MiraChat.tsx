@@ -18,6 +18,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { MessageCircle, Send, Sparkles, X, AlertCircle, Loader2 } from 'lucide-react';
+import { supabase } from '@/lib/supabase/client';
+import { useLanguage } from '@/contexts/LanguageContext';
+import { useWellnessDNAFull } from './WellnessDNA';
+import { buildMiraQuestion, type Locale } from '@/lib/miraPrompt';
 
 const MIRA_ENDPOINT = 'https://ohara-ai-backend-production.up.railway.app/chat';
 const REQUEST_TIMEOUT_MS = 20_000;
@@ -35,17 +39,43 @@ interface ChatMessage {
   text: string;
 }
 
-const QUICK_ACTIONS: ReadonlyArray<string> = [
-  'Recommend a snack',
-  'Low motivation today',
-  'Analyze my macros',
-] as const;
+function quickActionsFor(lang: Locale): ReadonlyArray<string> {
+  return lang === 'tr'
+    ? (['Bana bir öğün öner', 'Tatlı istiyorum', 'Motivasyon lazım'] as const)
+    : (['Suggest a meal', 'I want something sweet', 'I need motivation'] as const);
+}
+
+function welcomeText(lang: Locale): string {
+  return lang === 'tr'
+    ? "Merhaba, ben Mira ✨ Sıcak ve net bir wellness koçun. Yemek, motivasyon ya da makro sorularını sor — ya da aşağıdaki kısa yollardan birine dokun."
+    : "Hi, I'm Mira ✨ Your warm, decisive wellness coach. Ask me about meals, motivation, or macros — or tap a chip below.";
+}
+
+function inputPlaceholder(lang: Locale): string {
+  return lang === 'tr' ? "Mira'ya bir şey sor…" : 'Ask Mira anything…';
+}
+
+function errorTimeoutText(lang: Locale): string {
+  return lang === 'tr' ? 'İstek zaman aşımına uğradı. Tekrar dener misin?' : 'The request timed out. Please try again.';
+}
+
+function errorNetworkText(lang: Locale): string {
+  return lang === 'tr'
+    ? 'Sunucuya ulaşamadım. Bağlantını kontrol edip tekrar dener misin?'
+    : 'I had trouble reaching the server. Please check your connection and try again.';
+}
+
+function emptyAnswerFallback(lang: Locale): string {
+  return lang === 'tr'
+    ? 'Bu soruyu farklı şekilde sorabilir misin?'
+    : "Could you try rephrasing that?";
+}
 
 function newId(): string {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
-async function askMira(question: string, signal: AbortSignal): Promise<string> {
+async function askMira(question: string, signal: AbortSignal, lang: Locale): Promise<string> {
   const res = await fetch(MIRA_ENDPOINT, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -62,19 +92,45 @@ async function askMira(question: string, signal: AbortSignal): Promise<string> {
   }
   return typeof data.answer === 'string' && data.answer.trim().length > 0
     ? data.answer
-    : "I'm here whenever you're ready to chat. Could you try rephrasing that?";
+    : emptyAnswerFallback(lang);
 }
 
 export function MiraChat() {
+  const { language } = useLanguage();
+  const lang: Locale = language;
+
+  // Resolve the authenticated user so we can pull their Wellness DNA.
+  const [userId, setUserId] = useState<string | null>(null);
+  useEffect(() => {
+    let mounted = true;
+    void supabase.auth.getUser().then(({ data }) => {
+      if (mounted) setUserId(data.user?.id ?? null);
+    });
+    const { data: sub } = supabase.auth.onAuthStateChange((_evt, session) => {
+      setUserId(session?.user?.id ?? null);
+    });
+    return () => {
+      mounted = false;
+      sub.subscription.unsubscribe();
+    };
+  }, []);
+
+  const { dna } = useWellnessDNAFull(userId);
+
   const [open, setOpen] = useState<boolean>(false);
   const [messages, setMessages] = useState<ChatMessage[]>([
-    {
-      id: 'mira-welcome',
-      role: 'mira',
-      text:
-        "Hi, I'm Mira ✨ Your warm wellness coach. Ask me anything about meals, motivation, or your macros — or tap a chip below to get started.",
-    },
+    { id: 'mira-welcome', role: 'mira', text: welcomeText(lang) },
   ]);
+  // Keep welcome text in sync with locale on language switch
+  useEffect(() => {
+    setMessages((prev) => {
+      if (prev.length === 0 || prev[0].id !== 'mira-welcome') return prev;
+      const next = prev.slice();
+      next[0] = { ...next[0], text: welcomeText(lang) };
+      return next;
+    });
+  }, [lang]);
+
   const [input, setInput] = useState<string>('');
   const [pending, setPending] = useState<boolean>(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -110,22 +166,28 @@ export function MiraChat() {
       setPending(true);
 
       try {
-        const answer = await askMira(question, controller.signal);
+        // Build the compact "User Coaching Context" + Mira behavior rules
+        // block that wraps the raw question. The Railway /chat backend
+        // forwards the whole payload to its LLM, so this is currently
+        // the only way to enforce Mira's tone and decisiveness rules
+        // and feed her the Wellness DNA on every message.
+        const wrapped = buildMiraQuestion({
+          userQuestion: question,
+          locale: lang,
+          dna,
+        });
+        const answer = await askMira(wrapped, controller.signal, lang);
         setMessages((prev) => [...prev, { id: newId(), role: 'mira', text: answer }]);
       } catch (err) {
         const aborted = err instanceof DOMException && err.name === 'AbortError';
         console.error('[MiraChat] request failed:', err);
-        setErrorMsg(
-          aborted
-            ? 'The request timed out. Please try again.'
-            : 'I had trouble reaching the server. Please check your connection and try again.',
-        );
+        setErrorMsg(aborted ? errorTimeoutText(lang) : errorNetworkText(lang));
       } finally {
         window.clearTimeout(timeoutId);
         setPending(false);
       }
     },
-    [pending],
+    [pending, lang, dna],
   );
 
   const onSubmit = useCallback(
@@ -157,7 +219,7 @@ export function MiraChat() {
       {/* Floating launcher */}
       <motion.button
         data-testid="mira-chat-fab"
-        aria-label={open ? 'Close Mira' : 'Open Mira'}
+        aria-label={open ? (lang === 'tr' ? "Mira'yı kapat" : 'Close Mira') : (lang === 'tr' ? "Mira'yı aç" : 'Open Mira')}
         onClick={() => setOpen((v) => !v)}
         whileHover={{ scale: 1.05 }}
         whileTap={{ scale: 0.95 }}
@@ -186,12 +248,14 @@ export function MiraChat() {
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-semibold leading-tight">Mira</p>
-                <p className="text-xs text-white/80 leading-tight">your warm wellness coach</p>
+                <p className="text-xs text-white/80 leading-tight">
+                  {lang === 'tr' ? 'sıcak wellness koçun' : 'your warm wellness coach'}
+                </p>
               </div>
               <button
                 data-testid="mira-chat-close"
                 onClick={() => setOpen(false)}
-                aria-label="Close"
+                aria-label={lang === 'tr' ? 'Kapat' : 'Close'}
                 className="p-1.5 rounded-full hover:bg-white/15 transition"
               >
                 <X className="h-4 w-4" />
@@ -232,7 +296,9 @@ export function MiraChat() {
                 <div className="flex justify-start" data-testid="mira-chat-typing">
                   <div className="rounded-2xl rounded-bl-md bg-white border border-amber-100 px-4 py-2.5 shadow-sm flex items-center gap-2">
                     <Loader2 className="h-3.5 w-3.5 animate-spin text-orange-500" />
-                    <span className="text-xs text-amber-700">Mira is thinking…</span>
+                    <span className="text-xs text-amber-700">
+                      {lang === 'tr' ? 'Mira düşünüyor…' : 'Mira is thinking…'}
+                    </span>
                   </div>
                 </div>
               )}
@@ -251,7 +317,7 @@ export function MiraChat() {
 
             {/* Quick actions */}
             <div className="px-3 pt-1 pb-2 flex flex-wrap gap-2 border-t border-amber-100 bg-white/60">
-              {QUICK_ACTIONS.map((prompt) => (
+              {quickActionsFor(lang).map((prompt) => (
                 <button
                   key={prompt}
                   data-testid={`mira-quick-${prompt.replace(/\s+/g, '-').toLowerCase()}`}
@@ -274,8 +340,8 @@ export function MiraChat() {
                 data-testid="mira-chat-input"
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
-                placeholder="Ask Mira anything…"
-                aria-label="Message Mira"
+                placeholder={inputPlaceholder(lang)}
+                aria-label={lang === 'tr' ? "Mira'ya mesaj" : 'Message Mira'}
                 disabled={pending}
                 className="flex-1 rounded-full border border-amber-200 bg-white px-4 py-2.5 text-sm placeholder:text-amber-400 focus:outline-none focus:ring-2 focus:ring-orange-300 disabled:opacity-60"
               />

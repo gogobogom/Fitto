@@ -46,6 +46,7 @@ export type UserProfile = {
   wellness_goal: string | null;
   dietary_preference: string | null;
   allergies: string[] | null;
+  wellness_dna: Record<string, unknown> | null;
   created_at: string;
   updated_at: string;
 }

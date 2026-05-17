@@ -21,7 +21,13 @@ import { MessageCircle, Send, Sparkles, X, AlertCircle, Loader2 } from 'lucide-r
 import { supabase } from '@/lib/supabase/client';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useWellnessDNAFull } from './WellnessDNA';
-import { buildMiraQuestion, type Locale } from '@/lib/miraPrompt';
+import {
+  buildMiraQuestion,
+  excludedFoodsFromDNA,
+  findExcludedHits,
+  safeFallbackMessage,
+  type Locale,
+} from '@/lib/miraPrompt';
 
 const MIRA_ENDPOINT = 'https://ohara-ai-backend-production.up.railway.app/chat';
 const REQUEST_TIMEOUT_MS = 20_000;
@@ -73,6 +79,19 @@ function emptyAnswerFallback(lang: Locale): string {
 
 function newId(): string {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+/**
+ * Extract the headline of a Mira reply — the first non-empty line,
+ * stripped of markdown asterisks and trailing punctuation. Used to
+ * build the "don't repeat" hint on the next prompt.
+ */
+function firstLineOf(text: string): string {
+  for (const line of text.split('\n')) {
+    const cleaned = line.replace(/^\s*[\d.\-*•]+\s*/, '').replace(/[*_`]/g, '').trim();
+    if (cleaned.length > 0) return cleaned.slice(0, 80);
+  }
+  return '';
 }
 
 async function askMira(question: string, signal: AbortSignal, lang: Locale): Promise<string> {
@@ -135,6 +154,10 @@ export function MiraChat() {
   const [pending, setPending] = useState<boolean>(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
+  // Last 3 Mira suggestions (first line of each reply) so the next
+  // prompt can ask the model not to repeat them.
+  const [recentSuggestions, setRecentSuggestions] = useState<string[]>([]);
+
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const abortRef = useRef<AbortController | null>(null);
 
@@ -166,18 +189,51 @@ export function MiraChat() {
       setPending(true);
 
       try {
-        // Build the compact "User Coaching Context" + Mira behavior rules
-        // block that wraps the raw question. The Railway /chat backend
-        // forwards the whole payload to its LLM, so this is currently
-        // the only way to enforce Mira's tone and decisiveness rules
-        // and feed her the Wellness DNA on every message.
-        const wrapped = buildMiraQuestion({
+        // Build the compact "User Coaching Context" + Mira behavior
+        // rules block that wraps the raw question. The Railway /chat
+        // backend forwards the whole payload to its LLM, so this is
+        // currently the only way to enforce Mira's tone, intent map
+        // and Wellness DNA constraints on every message.
+        const excluded = excludedFoodsFromDNA(dna);
+
+        const firstWrapped = buildMiraQuestion({
           userQuestion: question,
           locale: lang,
           dna,
+          recentSuggestions,
         });
-        const answer = await askMira(wrapped, controller.signal, lang);
+        let answer = await askMira(firstWrapped, controller.signal, lang);
+
+        // Hard-constraint validation: if the response mentions any
+        // allergy / disliked food, ask Mira once for a clean rewrite.
+        let hits = findExcludedHits(answer, excluded);
+        if (hits.length > 0) {
+          console.warn('[MiraChat] DNA violation detected, retrying:', hits);
+          const repairWrapped = buildMiraQuestion({
+            userQuestion: question,
+            locale: lang,
+            dna,
+            recentSuggestions,
+            repairViolations: hits,
+          });
+          answer = await askMira(repairWrapped, controller.signal, lang);
+          hits = findExcludedHits(answer, excluded);
+        }
+
+        // If the retry still fails, fall back to a local DNA-safe
+        // message instead of rendering an unsafe suggestion.
+        if (hits.length > 0) {
+          console.warn('[MiraChat] DNA violation persisted after retry:', hits);
+          answer = safeFallbackMessage(lang, hits);
+        }
+
         setMessages((prev) => [...prev, { id: newId(), role: 'mira', text: answer }]);
+
+        // Track the headline of this suggestion so we don't repeat it.
+        const headline = firstLineOf(answer);
+        if (headline) {
+          setRecentSuggestions((prev) => [...prev, headline].slice(-3));
+        }
       } catch (err) {
         const aborted = err instanceof DOMException && err.name === 'AbortError';
         console.error('[MiraChat] request failed:', err);
@@ -187,7 +243,7 @@ export function MiraChat() {
         setPending(false);
       }
     },
-    [pending, lang, dna],
+    [pending, lang, dna, recentSuggestions],
   );
 
   const onSubmit = useCallback(

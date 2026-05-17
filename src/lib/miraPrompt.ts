@@ -25,6 +25,111 @@ export interface DailyStatsSnapshot {
   exerciseMinutes?: number;
 }
 
+// ----------------------------------------------------------------
+// Excluded foods — hard constraints from DNA
+// ----------------------------------------------------------------
+
+/**
+ * Lowercase + strip Turkish diacritics so "Kereviz" / "kereviz" /
+ * "KEREVİZ" all collapse to the same canonical token.
+ */
+export function normalizeFoodToken(s: string): string {
+  return s
+    .toLocaleLowerCase('tr-TR')
+    .replace(/ç/g, 'c')
+    .replace(/ğ/g, 'g')
+    .replace(/ı/g, 'i')
+    .replace(/ö/g, 'o')
+    .replace(/ş/g, 's')
+    .replace(/ü/g, 'u')
+    .replace(/[İI]/g, 'i')
+    .trim();
+}
+
+/**
+ * Pull every food the user must NOT see in a reply: allergies +
+ * disliked foods. Returns the raw, display-ready strings (used in
+ * the prompt) — call `normalizeFoodToken` separately for matching.
+ */
+export function excludedFoodsFromDNA(dna: WellnessDNAFull | null): string[] {
+  if (!dna) return [];
+  const a = dna.nutrition?.allergies ?? [];
+  const d = dna.nutrition?.disliked_foods ?? [];
+  const all = [...a, ...d].map((s) => s.trim()).filter((s) => s.length > 0);
+  // de-duplicate by normalized form, keep first display variant
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const f of all) {
+    const n = normalizeFoodToken(f);
+    if (!seen.has(n)) {
+      seen.add(n);
+      out.push(f);
+    }
+  }
+  return out;
+}
+
+/**
+ * Find which excluded foods appear in a Mira response. Word-boundary
+ * matching on the normalized string to avoid false positives from
+ * substrings (e.g. excluded "süt" should not match "sütun" / "sutun").
+ * Returns the original display-form excluded tokens that hit.
+ */
+export function findExcludedHits(responseText: string, excluded: string[]): string[] {
+  if (!responseText || excluded.length === 0) return [];
+  const haystack = normalizeFoodToken(responseText);
+  const hits: string[] = [];
+  for (const raw of excluded) {
+    const needle = normalizeFoodToken(raw);
+    if (!needle) continue;
+    // Word-boundary regex against non-letter chars / string edges.
+    const re = new RegExp(`(^|[^a-z])${escapeRegex(needle)}([^a-z]|$)`);
+    if (re.test(haystack)) hits.push(raw);
+  }
+  return hits;
+}
+
+function escapeRegex(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/**
+ * Last-resort safe reply when Mira keeps violating exclusions
+ * even after one retry. Mentions the excluded foods explicitly
+ * (telling the user we noticed and avoided them) and gives a
+ * category-level fallback that cannot possibly violate the DNA
+ * (we don't name a specific dish — we ask the user to pick).
+ */
+export function safeFallbackMessage(locale: Locale, violations: string[]): string {
+  const list = violations.join(', ');
+  if (locale === 'tr') {
+    return [
+      `Bu öneriyi Wellness DNA tercihlerinle çeliştiği için yeniliyorum. ${list} gibi sevmediğin/kaçındığın yiyecekleri kullanmadan alternatif önereceğim.`,
+      '',
+      'Hızlı, güvenli seçenekler (DNA\'na uygun) — hangisi şu an elinin altında?',
+      '• Sahanda yumurta + 1 avuç yeşillik',
+      '• Süzme yoğurt + 1 tatlı kaşığı ceviz + tarçın',
+      '• Peynir + zeytin + domates + salatalık tabağı',
+      '• Hellim ızgara + roka',
+      '',
+      'Hangisini istersen, sana 3 dakikada hazır miktarlı tarifi vereyim.',
+    ].join('\n');
+  }
+  return [
+    `I'm rewriting that suggestion — it conflicted with your Wellness DNA. I'll give you an alternative without ${list}.`,
+    '',
+    'Quick, safe options (DNA-compliant) — which is within reach right now?',
+    '• Pan eggs + a handful of greens',
+    '• Greek yogurt + a teaspoon of walnuts + cinnamon',
+    '• Cheese + olives + tomato + cucumber plate',
+    '• Grilled halloumi + rocket',
+    '',
+    'Tell me which one and I\'ll give you a portioned, 3-minute version.',
+  ].join('\n');
+}
+
+
+
 /**
  * Build a one-line, human-readable summary of the Wellness DNA.
  * Skips empty fields. Localized.
@@ -261,17 +366,84 @@ function miraRules(locale: Locale): string {
 }
 
 /**
+ * Compact coaching-knowledge block — distilled from the Master
+ * Veri concepts (Motivational Interviewing / OARS, SMART goals,
+ * habit formation, non-judgmental coaching). Sent once per
+ * message so Mira behaves like a coach, not just a recipe bot.
+ */
+function coachingKnowledge(locale: Locale): string {
+  if (locale === 'tr') {
+    return [
+      'KOÇLUK BİLGİSİ (Master Veri\'den özet, dahili):',
+      '- OARS (Açık uçlu sorular, Onaylama, Yansıtıcı dinleme, Özetleme) sadece duygusal/motivasyon kilitlerinde kullan; somut yemek isteklerinde ATLA.',
+      '- Kullanıcıyı yargılama, ders verme, suçlama YASAK. Diyet polisi olma.',
+      '- SMART hedef: spesifik, ölçülebilir, ulaşılabilir, anlamlı, zaman sınırlı. Hedef belirlerken bu yapıyı kullan.',
+      '- Alışkanlık tetikleyici → eylem → ödül modelini kullan; mikro adımlar öner ("2 dk", "1 bardak").',
+      '- "Olmalısın" yerine "olabilir, dener misin?" gibi öneri dili kullan.',
+      '- Duygusal kilit varsa: önce 1 yansıtıcı cümle + 1 destek + 1 gerçekçi sonraki adım. Anket yapma.',
+      '- Somut yemek istendi mi: koçluk diline geçme, direkt tarifi ver.',
+    ].join('\n');
+  }
+  return [
+    'COACHING KNOWLEDGE (Master Veri summary, internal):',
+    '- OARS (Open questions, Affirmations, Reflective listening, Summary) only when the user is emotionally stuck/unmotivated; for concrete food requests, SKIP this and go straight to the dish.',
+    '- Never judge, lecture, or shame. No "diet police" tone.',
+    '- SMART goals: specific, measurable, achievable, relevant, time-bound. Use this frame when setting a goal.',
+    '- Habit loop: trigger → action → reward. Suggest micro-actions ("2 min", "1 glass").',
+    '- Prefer "you could try…" over "you must…".',
+    '- If emotionally stuck: one reflective sentence + one affirmation + one realistic next step. No survey.',
+    '- If the ask is for concrete food, do NOT switch to coaching mode — give the dish immediately.',
+  ].join('\n');
+}
+
+/**
+ * Intent-aware behavior rules. Tells Mira to pick the right mode
+ * per message instead of always producing a recipe.
+ */
+function intentRules(locale: Locale): string {
+  if (locale === 'tr') {
+    return [
+      'NİYET HARİTASI — kullanıcının isteğine göre modu seç:',
+      '- Yemek/tatlı/atıştırmalık istek → SOMUT tarif/öneri formatını uygula.',
+      '- Düşük ruh hali, sıkılma, motivasyon eksikliği, stres → önce 1 yansıtıcı/cesaretlendirici cümle, sonra 1 gerçekçi sonraki adım (yürüyüş, su, hızlı atıştırmalık, kısa nefes egzersizi). Anket yapma.',
+      '- Makro/kalori sorusu → sayısal cevap (porsiyon başına protein/karb/yağ/kcal), sade ve net.',
+      '- Haftalık plan / "bana bir plan ver" → 5-7 günlük yapılandırılmış plan (her gün için kahvaltı/öğle/akşam + 1 not). DNA\'ya uygun.',
+      '- "Ne yapmalıyım?" / "yardım et" / belirsiz istek → koç gibi davran: kısa durum okuma + 1 somut sonraki adım. Sadece tarif üretme.',
+      '- Egzersiz isteği → DNA aktivite seviyesine göre 1 spesifik egzersiz fikri + süre.',
+    ].join('\n');
+  }
+  return [
+    'INTENT MAP — choose the right mode per message:',
+    '- Food/dessert/snack request → use the CONCRETE recipe/meal format.',
+    '- Low mood, boredom, lack of motivation, stress → first one reflective/affirming line, then one realistic next step (walk, water, quick snack, 60-sec breathing). No survey.',
+    '- Macros/calories question → numeric answer (per portion protein/carb/fat/kcal), clean and direct.',
+    '- Weekly plan / "give me a plan" → structured 5-7 day plan (breakfast/lunch/dinner + one note per day). DNA-compliant.',
+    '- "What should I do?" / "help me" / vague request → act like a coach: brief read of the situation + one concrete next step. Don\'t just generate a recipe.',
+    '- Exercise request → one specific exercise idea + duration matched to DNA activity level.',
+  ].join('\n');
+}
+
+/**
  * Build the final payload string sent to Mira's backend as
  * `{ question: <returned string> }`. Compact, deterministic.
+ *
+ * `recentSuggestions` — last few dish names already proposed in
+ * this chat, so Mira does not repeat the same core combination.
+ *
+ * `repairViolations` — set on a retry after the previous response
+ * mentioned an excluded food. Mira must rewrite WITHOUT those.
  */
 export function buildMiraQuestion(params: {
   userQuestion: string;
   locale: Locale;
   dna: WellnessDNAFull | null;
   stats?: DailyStatsSnapshot;
+  recentSuggestions?: string[];
+  repairViolations?: string[];
 }): string {
-  const { userQuestion, locale, dna, stats } = params;
+  const { userQuestion, locale, dna, stats, recentSuggestions, repairViolations } = params;
   const ctx = summarizeWellnessDNA(dna, locale);
+  const excluded = excludedFoodsFromDNA(dna);
   const statsLine = stats && (stats.caloriesConsumed != null || stats.caloriesTarget != null)
     ? (locale === 'tr' ? 'Bugün: ' : 'Today: ') +
       [
@@ -290,8 +462,59 @@ export function buildMiraQuestion(params: {
   const header = locale === 'tr' ? '[FITTO KOÇLUK BAĞLAMI]' : '[FITTO COACHING CONTEXT]';
   const localeLine = `Locale: ${locale.toUpperCase()}`;
   const dnaLine = (locale === 'tr' ? 'Kullanıcı: ' : 'User: ') + ctx;
-  const blockLines = [header, localeLine, dnaLine];
+  const blockLines: string[] = [header, localeLine, dnaLine];
   if (statsLine) blockLines.push(statsLine);
+
+  // HARD EXCLUSION block — top priority, repeated for emphasis.
+  if (excluded.length > 0) {
+    const exList = excluded.join(', ');
+    if (locale === 'tr') {
+      blockLines.push('');
+      blockLines.push(`KESİN YASAKLI YİYECEKLER: ${exList}.`);
+      blockLines.push(
+        'Bu yiyecekleri tarifte, öneride, alternatifte, malzeme listesinde veya örnek olarak ASLA kullanma. Adıyla bile geçirme. Bu kural HER kurala üstündür.',
+      );
+    } else {
+      blockLines.push('');
+      blockLines.push(`STRICTLY EXCLUDED FOODS: ${exList}.`);
+      blockLines.push(
+        'Never use these foods in recipes, suggestions, alternatives, ingredient lists, or examples. Do not even name them. This rule overrides every other rule.',
+      );
+    }
+  }
+
+  // Recent suggestion repetition guard
+  if (recentSuggestions && recentSuggestions.length > 0) {
+    const list = recentSuggestions.slice(-3).join(' | ');
+    blockLines.push('');
+    if (locale === 'tr') {
+      blockLines.push(`SON ÖNERİLER (TEKRAR ETME): ${list}.`);
+      blockLines.push('Aynı ana malzeme kombinasyonunu tekrar önerme; farklı bir kategori veya protein seç.');
+    } else {
+      blockLines.push(`RECENT SUGGESTIONS (DO NOT REPEAT): ${list}.`);
+      blockLines.push('Do not propose the same main-ingredient combination again; pick a different category or protein.');
+    }
+  }
+
+  // Repair instruction if previous response violated exclusion
+  if (repairViolations && repairViolations.length > 0) {
+    const viol = repairViolations.join(', ');
+    blockLines.push('');
+    if (locale === 'tr') {
+      blockLines.push(
+        `ÖNCEKİ YANITINI DÜZELT: Önceki yanıtın yasaklı yiyecek(ler) içeriyordu: ${viol}. Yanıtı baştan, BU yiyecekleri hiçbir biçimde kullanmadan yeniden yaz. Aynı temel öneriyi koruma — tamamen farklı bir tarif/öneri ver.`,
+      );
+    } else {
+      blockLines.push(
+        `REPAIR YOUR PREVIOUS ANSWER: Your previous reply included excluded food(s): ${viol}. Rewrite the answer completely without those foods. Do not keep the same core suggestion — give a fully different recipe/suggestion.`,
+      );
+    }
+  }
+
+  blockLines.push('');
+  blockLines.push(intentRules(locale));
+  blockLines.push('');
+  blockLines.push(coachingKnowledge(locale));
   blockLines.push('');
   blockLines.push(miraRules(locale));
   blockLines.push('');

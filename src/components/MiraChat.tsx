@@ -95,6 +95,26 @@ function firstLineOf(text: string): string {
 }
 
 async function askMira(question: string, signal: AbortSignal, lang: Locale): Promise<string> {
+  // Dev-only debug logging — no secrets, no full prompt dumped.
+  // Reports endpoint, body keys, first line + first 300 chars of the
+  // question, whether the question starts with the raw user message
+  // or with our wrapper, and response key shape on success.
+  const isDev = typeof process !== 'undefined' && process.env.NODE_ENV !== 'production';
+  if (isDev) {
+    const firstLine = question.split('\n', 1)[0] ?? '';
+    const looksWrapped = /^\[(FITTO|BAĞLAM|CONTEXT|USER QUESTION|KULLANICI SORUSU)/i.test(firstLine);
+     
+    console.debug('[MiraChat][req]', {
+      endpoint: MIRA_ENDPOINT,
+      bodyKeys: ['question'],
+      questionFirstLine: firstLine.slice(0, 300),
+      questionPreview: question.slice(0, 300),
+      questionStartsWithRawUserMessage: !looksWrapped,
+      questionLength: question.length,
+      locale: lang,
+    });
+  }
+
   const res = await fetch(MIRA_ENDPOINT, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -103,10 +123,23 @@ async function askMira(question: string, signal: AbortSignal, lang: Locale): Pro
   });
   if (!res.ok) throw new Error(`Network response was not ok (${res.status})`);
   const data: MiraResponse = await res.json();
+
+  if (isDev) {
+     
+    console.debug('[MiraChat][res]', {
+      ok: true,
+      status: res.status,
+      responseKeys: Object.keys(data as Record<string, unknown>),
+      hasAnswer: typeof data.answer === 'string' && data.answer.trim().length > 0,
+      hasUsedChunks: data.used_chunks !== undefined && data.used_chunks !== null,
+      usedChunksCount: Array.isArray(data.used_chunks) ? data.used_chunks.length : undefined,
+    });
+  }
+
   // Debug-only: surface retrieval chunks so we can verify RAG locally,
   // but never render them to the user.
   if (data.used_chunks !== undefined) {
-    // eslint-disable-next-line no-console
+     
     console.debug('[MiraChat] used_chunks:', data.used_chunks);
   }
   return typeof data.answer === 'string' && data.answer.trim().length > 0

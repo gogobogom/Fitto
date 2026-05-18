@@ -433,8 +433,54 @@ function intentRules(locale: Locale): string {
 }
 
 /**
+ * Compact one-line-per-intent guidance. Replaces the old multi-block
+ * scaffold (miraRules + coachingKnowledge + intentRules) that used to
+ * be prepended to every message. The old block put ~80+ lines of food
+ * format rules ABOVE the user's actual question, which polluted the
+ * Railway `/chat` RAG retrieval (it indexed on "FITTO KOÇLUK / KURALLAR"
+ * rules text instead of on the user's real intent). This shorter,
+ * intent-aware version sits AFTER the user message so retrieval keys
+ * on the user's actual words. It also avoids forcing every reply into
+ * "dish name / ingredients / steps / kcal / macros" format.
+ */
+function compactGuidance(locale: Locale): string {
+  if (locale === 'tr') {
+    return [
+      'YANIT KURALLARI (kısa):',
+      "- Sen Mira'sın: sıcak, kararlı, pratik bir wellness koçu. Açılış selamı verme, yansıtma yapma, klişe doldurma yapma.",
+      '- Cevabı kullanıcının niyetine göre seç:',
+      '  • Yemek/tarif/atıştırmalık isteği → somut yemek adı, miktarlı malzemeler, 2-4 adım, kabaca kalori + protein/karb/yağ, gerekirse 1 akıllı değişim. DNA alerji/sevmediklerini ASLA kullanma.',
+      "  • Motivasyon / düşük ruh hali / 'tarif verme' → tarif ÜRETME. 1 kısa empati cümlesi + 1 somut sonraki adım (örn. 10 dk yürüyüş, 2 bardak su, oturarak nefes egzersizi) + 1 pratik koçluk notu.",
+      '  • Bilgi / "neden" / açıklama → MASTER_VERI bilgisini kullanarak net ve kısa açıkla; gereksiz tarif önerme.',
+      "  • Aşırı yedikten sonra ne yapmalı → AÇ KALMAYI ÖNERME. Toparlanma rehberliği ver: bol su, hafif protein+sebze, yürüyüş, ertesi günü normal yemek.",
+      '  • Makro/kalori sorusu → sayısal, kısa.',
+      '- Wellness DNA: alerji/sevmediği yiyecekleri ASLA önerme. Low-carb kullanıcıda yüksek karbonhidratlı malzemeleri öneri olarak değil, sadece "kaçın/sınırla" çerçevesinde an.',
+      '- Cevap TÜRKÇE olsun, karışık dil olmasın. ≤ 180 kelime, en fazla 1-2 emoji. Her cevabı soruyla bitirme.',
+    ].join('\n');
+  }
+  return [
+    'REPLY RULES (short):',
+    "- You are Mira: warm, decisive, practical wellness coach. No opening greeting, no mirroring, no filler.",
+    "- Pick the mode by user intent:",
+    '  • Food/recipe/snack request → concrete dish name, portioned ingredients, 2-4 steps, rough kcal + protein/carb/fat, one smart swap if useful. Never use DNA allergies/dislikes.',
+    "  • Motivation / low mood / 'no recipe' → DO NOT generate a recipe. One short empathy line + one concrete next step (10-min walk, 2 glasses of water, 60-sec breathing) + one practical coaching note.",
+    '  • Explanation / "why" question → answer clearly using MASTER_VERI knowledge; do NOT push a recipe.',
+    '  • After overeating → DO NOT tell them to starve. Give recovery guidance: hydrate, light protein+veg, walk, eat normally the next day.',
+    '  • Macros/calories → numeric, brief.',
+    '- Wellness DNA: never suggest allergies/disliked foods. For low-carb users, frame high-carb items as "avoid/limit", not as suggestions.',
+    "- Reply in the user's language, no mixing. ≤ 180 words, at most 1-2 emojis. Do not end every reply with a question.",
+  ].join('\n');
+}
+
+/**
  * Build the final payload string sent to Mira's backend as
  * `{ question: <returned string> }`. Compact, deterministic.
+ *
+ * IMPORTANT — request shape (kept aligned with Hoppscotch behavior):
+ * The first line of the returned string is the user's clean question so
+ * the Railway `/chat` RAG retriever keys on the user's real intent, not
+ * on our coaching scaffold. Wellness DNA + intent guidance are appended
+ * BELOW the user question as compact context.
  *
  * `recentSuggestions` — last few dish names already proposed in
  * this chat, so Mira does not repeat the same core combination.
@@ -468,67 +514,49 @@ export function buildMiraQuestion(params: {
         .join(', ')
     : '';
 
-  const header = locale === 'tr' ? '[FITTO KOÇLUK BAĞLAMI]' : '[FITTO COACHING CONTEXT]';
-  const localeLine = `Locale: ${locale.toUpperCase()}`;
-  const dnaLine = (locale === 'tr' ? 'Kullanıcı: ' : 'User: ') + ctx;
-  const blockLines: string[] = [header, localeLine, dnaLine];
+  // --- 1) User's clean question FIRST (this drives RAG retrieval). ---
+  const blockLines: string[] = [userQuestion.trim()];
+
+  // --- 2) Compact context block AFTER the question. ---
+  blockLines.push('');
+  blockLines.push(locale === 'tr' ? '[BAĞLAM]' : '[CONTEXT]');
+  blockLines.push(`Locale: ${locale.toUpperCase()}`);
+  blockLines.push((locale === 'tr' ? 'Kullanıcı: ' : 'User: ') + ctx);
   if (statsLine) blockLines.push(statsLine);
 
-  // HARD EXCLUSION block — top priority, repeated for emphasis.
+  // Hard exclusions — compact, one line.
   if (excluded.length > 0) {
     const exList = excluded.join(', ');
-    if (locale === 'tr') {
-      blockLines.push('');
-      blockLines.push(`KESİN YASAKLI YİYECEKLER: ${exList}.`);
-      blockLines.push(
-        'Bu yiyecekleri tarifte, öneride, alternatifte, malzeme listesinde veya örnek olarak ASLA kullanma. Adıyla bile geçirme. Bu kural HER kurala üstündür.',
-      );
-    } else {
-      blockLines.push('');
-      blockLines.push(`STRICTLY EXCLUDED FOODS: ${exList}.`);
-      blockLines.push(
-        'Never use these foods in recipes, suggestions, alternatives, ingredient lists, or examples. Do not even name them. This rule overrides every other rule.',
-      );
-    }
+    blockLines.push(
+      locale === 'tr'
+        ? `Yasaklı (alerji/sevmediği): ${exList}. Bu yiyecekleri ASLA önerme veya adıyla anma.`
+        : `Forbidden (allergies/dislikes): ${exList}. Never suggest or name these.`,
+    );
   }
 
-  // Recent suggestion repetition guard
+  // Recent-suggestion repetition guard — compact.
   if (recentSuggestions && recentSuggestions.length > 0) {
     const list = recentSuggestions.slice(-3).join(' | ');
-    blockLines.push('');
-    if (locale === 'tr') {
-      blockLines.push(`SON ÖNERİLER (TEKRAR ETME): ${list}.`);
-      blockLines.push('Aynı ana malzeme kombinasyonunu tekrar önerme; farklı bir kategori veya protein seç.');
-    } else {
-      blockLines.push(`RECENT SUGGESTIONS (DO NOT REPEAT): ${list}.`);
-      blockLines.push('Do not propose the same main-ingredient combination again; pick a different category or protein.');
-    }
+    blockLines.push(
+      locale === 'tr'
+        ? `Son öneriler (tekrar etme): ${list}.`
+        : `Recent suggestions (do not repeat): ${list}.`,
+    );
   }
 
-  // Repair instruction if previous response violated exclusion
+  // Repair instruction (only on the explicit retry path).
   if (repairViolations && repairViolations.length > 0) {
     const viol = repairViolations.join(', ');
-    blockLines.push('');
-    if (locale === 'tr') {
-      blockLines.push(
-        `ÖNCEKİ YANITINI DÜZELT: Önceki yanıtın yasaklı yiyecek(ler) içeriyordu: ${viol}. Yanıtı baştan, BU yiyecekleri hiçbir biçimde kullanmadan yeniden yaz. Aynı temel öneriyi koruma — tamamen farklı bir tarif/öneri ver.`,
-      );
-    } else {
-      blockLines.push(
-        `REPAIR YOUR PREVIOUS ANSWER: Your previous reply included excluded food(s): ${viol}. Rewrite the answer completely without those foods. Do not keep the same core suggestion — give a fully different recipe/suggestion.`,
-      );
-    }
+    blockLines.push(
+      locale === 'tr'
+        ? `ÖNCEKİ YANITI DÜZELT: yasaklı (${viol}) geçti. Tamamen farklı bir öneri ver, bu yiyecekleri kullanma.`
+        : `REPAIR PREVIOUS ANSWER: it included forbidden (${viol}). Give a fully different answer without those foods.`,
+    );
   }
 
+  // --- 3) Minimal intent-aware guidance — short, after the question. ---
   blockLines.push('');
-  blockLines.push(intentRules(locale));
-  blockLines.push('');
-  blockLines.push(coachingKnowledge(locale));
-  blockLines.push('');
-  blockLines.push(miraRules(locale));
-  blockLines.push('');
-  blockLines.push(locale === 'tr' ? '[KULLANICI SORUSU]' : '[USER QUESTION]');
-  blockLines.push(userQuestion.trim());
+  blockLines.push(compactGuidance(locale));
 
   return blockLines.join('\n');
 }

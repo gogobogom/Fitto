@@ -46,6 +46,14 @@ export default function Home() {
   const [supabaseChecked, setSupabaseChecked] = useState(false);
   const [forceReady, setForceReady] = useState(false);
 
+  // Onboarding submit state — used to drive the inline visible error
+  // on the "Profilini Oluştur" screen when the Supabase upsert fails.
+  // Previously the failure was surfaced via alert(), which is silently
+  // suppressed in some WebView/preview contexts and made the click look
+  // like a no-op. We now display a red inline error on the same screen.
+  const [onboardingError, setOnboardingError] = useState<string | null>(null);
+  const [onboardingSubmitting, setOnboardingSubmitting] = useState<boolean>(false);
+
   useEffect(() => {
     let mounted = true;
 
@@ -141,10 +149,16 @@ export default function Home() {
   ): Promise<void> => {
     const uid = effectiveIdentity;
     if (!uid) {
-      alert('Oturum bulunamadı. Lütfen tekrar giriş yap.');
+      // Session was lost between sign-in and submit — bounce to login.
+      // Surface visibly in case the navigation is delayed.
+      setOnboardingError('Oturum bulunamadı. Lütfen tekrar giriş yap.');
       router.push('/auth/login');
       return;
     }
+
+    // Clear any previous error and signal "in flight" so Tamamla disables.
+    setOnboardingError(null);
+    setOnboardingSubmitting(true);
 
     try {
       // Prefer old connection reducers if available, otherwise do Supabase-only upserts
@@ -217,11 +231,28 @@ export default function Home() {
 
       if (goalsErr) throw goalsErr;
 
-      // Refresh to re-fetch data
+      // Success — refresh to re-fetch profile/goals and exit onboarding.
+      // (We deliberately leave onboardingSubmitting=true so the button stays
+      // disabled during the brief navigation window.)
       window.location.reload();
     } catch (error) {
+      // Always log the full error in dev so the Next.js console / browser
+      // devtools show the complete Supabase payload (do NOT swallow).
       console.error('Error completing onboarding:', error);
-      alert('Profil oluşturulurken bir hata oluştu. Lütfen tekrar deneyin.');
+
+      // Surface the safest available message inline on the same screen.
+      const err = error as { message?: unknown; code?: unknown; details?: unknown; hint?: unknown } | null;
+      const pick = (v: unknown): string | null =>
+        typeof v === 'string' && v.trim().length > 0 ? v : null;
+      const visible =
+        pick(err?.message) ??
+        pick(err?.code) ??
+        pick(err?.details) ??
+        pick(err?.hint) ??
+        'Profil kaydedilemedi. Lütfen tekrar deneyin.';
+
+      setOnboardingError(visible);
+      setOnboardingSubmitting(false);
     }
   };
 
@@ -273,7 +304,14 @@ export default function Home() {
 
   // If profile missing -> onboarding (now works with Supabase-only)
   if (!userProfile) {
-    return <Onboarding identity={effectiveIdentity} onComplete={handleOnboardingComplete} />;
+    return (
+      <Onboarding
+        identity={effectiveIdentity}
+        onComplete={handleOnboardingComplete}
+        submitError={onboardingError}
+        submitting={onboardingSubmitting}
+      />
+    );
   }
 
   // If old code still requires "connection" for dashboard, show a clear error instead of trapping

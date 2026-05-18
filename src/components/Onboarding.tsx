@@ -16,9 +16,13 @@ import { useLanguage } from '@/contexts/LanguageContext';
 interface OnboardingProps {
   identity: string;
   onComplete: (username: string, age: number, weightKg: number, heightCm: number, gender: Gender, activityLevel: ActivityLevel, goalType: GoalType, targetWeightKg: number, dailyCalorieTarget: number) => void;
+  /** Optional: visible inline error from the parent's save handler (e.g. Supabase upsert failure). */
+  submitError?: string | null;
+  /** Optional: parent is awaiting the save; disable Tamamla so the user can't spam-click. */
+  submitting?: boolean;
 }
 
-export function Onboarding({ identity, onComplete }: OnboardingProps) {
+export function Onboarding({ identity, onComplete, submitError = null, submitting = false }: OnboardingProps) {
   const [step, setStep] = useState<number>(1);
   const [username, setUsername] = useState<string>('');
   const [age, setAge] = useState<string>('');
@@ -198,13 +202,23 @@ export function Onboarding({ identity, onComplete }: OnboardingProps) {
                   />
                 </div>
                 <div className="flex gap-3 mt-2">
-                  <Button onClick={() => setStep(1)} variant="outline" className="flex-1 h-12 text-base font-semibold doodle-button border-gray-900 font-doodle">
+                  <Button onClick={() => setStep(1)} variant="outline" disabled={submitting} className="flex-1 h-12 text-base font-semibold doodle-button border-gray-900 font-doodle">
                     {t('onboarding.back')}
                   </Button>
-                  <Button onClick={handleComplete} className="flex-1 h-12 text-base font-semibold doodle-button border-gray-900 font-doodle">
+                  <Button onClick={handleComplete} disabled={submitting} data-testid="onboarding-complete-btn" className="flex-1 h-12 text-base font-semibold doodle-button border-gray-900 font-doodle">
                     {t('onboarding.complete')}
                   </Button>
                 </div>
+                {submitError && (
+                  <div
+                    data-testid="onboarding-submit-error"
+                    role="alert"
+                    aria-live="assertive"
+                    className="mt-2 rounded-md border border-red-300 bg-red-50 text-red-700 text-sm font-doodle-alt px-3 py-2 break-words"
+                  >
+                    {submitError}
+                  </div>
+                )}
               </>
             )}
           </CardContent>

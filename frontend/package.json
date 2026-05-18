@@ -1,0 +1,11 @@
+{
+  "name": "frontend-shim",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Supervisor shim. The real Next.js app lives at /app. This package.json only exists because the Emergent supervisor config expects a /app/frontend directory and runs `yarn start` from it. The start/dev scripts delegate to the root Next.js app.",
+  "scripts": {
+    "start": "cd /app && exec node node_modules/next/dist/bin/next start -H 0.0.0.0 -p 3000",
+    "dev": "cd /app && exec node node_modules/next/dist/bin/next dev -H 0.0.0.0 -p 3000",
+    "build": "cd /app && exec node node_modules/next/dist/bin/next build"
+  }
+}

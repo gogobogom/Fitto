@@ -4,6 +4,9 @@ out/
 .mobile-build-stash/
 .env.local
 next.log
+# Supervisor backend-shim runtime artifact (created by uvicorn loading backend/server.py).
+backend/__pycache__/
+__pycache__/
 -e 
 # Environment and credential files
 .env

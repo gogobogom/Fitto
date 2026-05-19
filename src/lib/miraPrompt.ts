@@ -25,6 +25,78 @@ export interface DailyStatsSnapshot {
   exerciseMinutes?: number;
 }
 
+/**
+ * Compact, JSON-safe profile payload sent alongside `question` to the
+ * Railway `/chat` backend. The backend treats this as a first-class
+ * field (probed: when present, used_chunks increases and the answer
+ * respects `disliked_foods`). Keys are snake_case to match its schema.
+ *
+ * All fields are optional so a user with an empty / incomplete DNA
+ * still gets a valid object (the backend then falls back to chat-only
+ * behavior). Arrays default to []; scalars default to null/undefined.
+ */
+export interface MiraProfilePayload {
+  language: Locale;
+  diet?: string | null;
+  goal?: string | null;
+  target_weight_kg?: number | null;
+  activity_level?: string | null;
+  allergies: string[];
+  disliked_foods: string[];
+  favorite_foods: string[];
+  cooking_time?: string | null;
+  cooking_skill?: string | null;
+  budget?: string | null;
+  tone?: string | null;
+  detail_level?: string | null;
+  health_flags?: Record<string, boolean | string>;
+}
+
+/**
+ * Map the in-app WellnessDNAFull (camelCase / nested) to the compact
+ * snake_case `profile` object the backend understands.
+ *
+ * The shape was confirmed against the Railway endpoint:
+ *   POST /chat { question, language, profile }
+ * returns answers with non-empty used_chunks and respects
+ * disliked_foods, while { question } alone returns used_chunks=0.
+ *
+ * This mapper does NOT invent new DNA fields — it only forwards what
+ * the user has already saved in `public.user_profiles.wellness_dna`.
+ */
+export function buildMiraProfilePayload(
+  dna: WellnessDNAFull | null,
+  locale: Locale,
+): MiraProfilePayload {
+  const allergies = (dna?.nutrition?.allergies ?? []).filter(Boolean);
+  const disliked = (dna?.nutrition?.disliked_foods ?? []).filter(Boolean);
+  const favorites = (dna?.nutrition?.favorite_foods ?? []).filter(Boolean);
+
+  const flags: Record<string, boolean | string> = {};
+  if (dna?.health_flags?.pregnancy_breastfeeding) flags.pregnancy_breastfeeding = true;
+  if (dna?.health_flags?.diabetes) flags.diabetes = true;
+  if (dna?.health_flags?.hypertension) flags.hypertension = true;
+  if (dna?.health_flags?.eating_disorder_history) flags.eating_disorder_history = true;
+  if (dna?.health_flags?.medical_diet) flags.medical_diet = dna.health_flags.medical_diet;
+
+  return {
+    language: locale,
+    diet: dna?.nutrition?.dietary_preference ?? null,
+    goal: dna?.goal?.primary ?? null,
+    target_weight_kg: dna?.goal?.target_weight_kg ?? null,
+    activity_level: dna?.body?.activity_level ?? null,
+    allergies,
+    disliked_foods: disliked,
+    favorite_foods: favorites,
+    cooking_time: dna?.nutrition?.cooking_time ?? null,
+    cooking_skill: dna?.nutrition?.cooking_skill ?? null,
+    budget: dna?.nutrition?.budget ?? null,
+    tone: dna?.coaching?.tone ?? null,
+    detail_level: dna?.coaching?.detail_level ?? null,
+    health_flags: Object.keys(flags).length > 0 ? flags : undefined,
+  };
+}
+
 // ----------------------------------------------------------------
 // Excluded foods — hard constraints from DNA
 // ----------------------------------------------------------------

@@ -23,10 +23,12 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import { useWellnessDNAFull } from './WellnessDNA';
 import {
   buildMiraQuestion,
+  buildMiraProfilePayload,
   excludedFoodsFromDNA,
   findExcludedHits,
   safeFallbackMessage,
   type Locale,
+  type MiraProfilePayload,
 } from '@/lib/miraPrompt';
 
 const MIRA_ENDPOINT = 'https://ohara-ai-backend-production.up.railway.app/chat';
@@ -94,7 +96,18 @@ function firstLineOf(text: string): string {
   return '';
 }
 
-async function askMira(question: string, signal: AbortSignal, lang: Locale): Promise<string> {
+async function askMira(
+  question: string,
+  signal: AbortSignal,
+  lang: Locale,
+  profile: MiraProfilePayload,
+): Promise<string> {
+  // Backend accepts an optional structured `profile` object alongside
+  // `question`. When sent, RAG retrieval engages (used_chunks > 0) and
+  // the answer respects DNA fields such as disliked_foods. We always
+  // send it (profile has safe empty defaults for users without DNA).
+  const requestBody = { question, language: lang, profile };
+
   // Dev-only debug logging — no secrets, no full prompt dumped.
   // Reports endpoint, body keys, first line + first 300 chars of the
   // question, whether the question starts with the raw user message
@@ -106,19 +119,31 @@ async function askMira(question: string, signal: AbortSignal, lang: Locale): Pro
      
     console.debug('[MiraChat][req]', {
       endpoint: MIRA_ENDPOINT,
-      bodyKeys: ['question'],
+      bodyKeys: Object.keys(requestBody),
       questionFirstLine: firstLine.slice(0, 300),
       questionPreview: question.slice(0, 300),
       questionStartsWithRawUserMessage: !looksWrapped,
       questionLength: question.length,
       locale: lang,
+      profileKeys: Object.keys(profile),
+      profileSummary: {
+        language: profile.language,
+        diet: profile.diet,
+        goal: profile.goal,
+        allergiesCount: profile.allergies.length,
+        dislikedCount: profile.disliked_foods.length,
+        favoritesCount: profile.favorite_foods.length,
+        cookingTime: profile.cooking_time,
+        tone: profile.tone,
+        healthFlagsCount: profile.health_flags ? Object.keys(profile.health_flags).length : 0,
+      },
     });
   }
 
   const res = await fetch(MIRA_ENDPOINT, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ question }),
+    body: JSON.stringify(requestBody),
     signal,
   });
   if (!res.ok) throw new Error(`Network response was not ok (${res.status})`);
@@ -228,6 +253,7 @@ export function MiraChat() {
         // currently the only way to enforce Mira's tone, intent map
         // and Wellness DNA constraints on every message.
         const excluded = excludedFoodsFromDNA(dna);
+        const profile = buildMiraProfilePayload(dna, lang);
 
         const firstWrapped = buildMiraQuestion({
           userQuestion: question,
@@ -235,7 +261,7 @@ export function MiraChat() {
           dna,
           recentSuggestions,
         });
-        let answer = await askMira(firstWrapped, controller.signal, lang);
+        let answer = await askMira(firstWrapped, controller.signal, lang, profile);
 
         // Hard-constraint validation: if the response mentions any
         // allergy / disliked food, ask Mira once for a clean rewrite.
@@ -249,7 +275,7 @@ export function MiraChat() {
             recentSuggestions,
             repairViolations: hits,
           });
-          answer = await askMira(repairWrapped, controller.signal, lang);
+          answer = await askMira(repairWrapped, controller.signal, lang, profile);
           hits = findExcludedHits(answer, excluded);
         }
 

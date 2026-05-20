@@ -61,3 +61,14 @@ export const getConfigStatus = () => ({
   keyConfigured: !!supabaseAnonKey,
   ready: !!supabaseUrl && !!supabaseAnonKey,
 });
+
+/**
+ * Returns true when both NEXT_PUBLIC_SUPABASE_URL and
+ * NEXT_PUBLIC_SUPABASE_ANON_KEY are set at build/runtime.
+ *
+ * Use this to gate features that need a real Supabase backend so the UI
+ * can render a clear "not configured" state instead of silently failing.
+ * Never log the actual values — only the boolean.
+ */
+export const isSupabaseConfigured = (): boolean =>
+  !!supabaseUrl && !!supabaseAnonKey;

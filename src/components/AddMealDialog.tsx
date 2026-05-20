@@ -8,7 +8,7 @@ import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Search, Plus } from 'lucide-react';
-import { supabase } from '@/lib/supabase/client';
+import { supabase, isSupabaseConfigured } from '@/lib/supabase/client';
 import { TURKISH_FOOD_DATABASE } from '@/lib/turkishFoodDatabase';
 import type { SupabaseConnection } from '@/hooks/useSupabase';
 import type { FoodItem } from '@/types/supabase';
@@ -57,6 +57,16 @@ export function AddMealDialog({ connection, currentDate, onClose, foodItems, mea
   const [isSearching, setIsSearching] = useState<boolean>(false);
   const [showSuggestions, setShowSuggestions] = useState<boolean>(false);
 
+  // Track which data source produced the current suggestions, and surface
+  // a clear UI state for each outcome (results / no results / connection
+  // error / supabase-not-configured-fallback).
+  type SearchSource = 'supabase' | 'local-fallback' | null;
+  type SearchStatus = 'idle' | 'results' | 'empty' | 'error';
+  const [searchSource, setSearchSource] = useState<SearchSource>(null);
+  const [searchStatus, setSearchStatus] = useState<SearchStatus>('idle');
+  const [searchErrorMsg, setSearchErrorMsg] = useState<string>('');
+  const supabaseReady = isSupabaseConfigured();
+
   // Manual entry fields
   const [mealName, setMealName] = useState<string>('');
   const [calories, setCalories] = useState<string>('');
@@ -70,30 +80,40 @@ export function AddMealDialog({ connection, currentDate, onClose, foodItems, mea
     mealType || getDefaultMealType()
   );
 
-  // Search local Turkish food database (in-memory, no Supabase round-trip).
-  // Replaces the previous `food_database` Supabase query which was unreliable
-  // in preview / unseeded environments. Manual entry still works below, and
-  // meal saving via Supabase `meals` table (handleAddMeal) is unchanged.
+  // Food-search data flow:
+  //
+  //   1. If Supabase is configured (NEXT_PUBLIC_SUPABASE_URL +
+  //      NEXT_PUBLIC_SUPABASE_ANON_KEY both set), query the `food_database`
+  //      table with a case-insensitive match on name_tr OR name.
+  //      • non-empty rows  →  show results
+  //      • zero rows       →  show "Sonuç bulunamadı" (no results)
+  //      • network/SDK err →  show a clear connection-error message
+  //
+  //   2. If Supabase is NOT configured, fall back to the bundled local
+  //      Turkish food list (153 items) so the modal stays useful offline.
+  //      A visible badge tells the user the data is offline.
+  //
+  // Saving the chosen meal (handleAddMeal) ALWAYS goes through Supabase
+  // `meals` — unchanged from before.
   useEffect(() => {
     if (searchTerm.trim().length < 2) {
       setSuggestions([]);
       setShowSuggestions(false);
+      setSearchStatus('idle');
+      setSearchSource(null);
+      setSearchErrorMsg('');
       return;
     }
 
-    setIsSearching(true);
+    let cancelled = false;
 
-    const debounceTimer = setTimeout(() => {
+    const runLocalFallback = (): void => {
       const needle = searchTerm.trim().toLowerCase();
-
       const matches = TURKISH_FOOD_DATABASE.filter((food) => {
-        const nameTr = food.nameTr.toLowerCase();
-        const name = food.name.toLowerCase();
-        const category = food.category.toLowerCase();
         return (
-          nameTr.includes(needle) ||
-          name.includes(needle) ||
-          category.includes(needle)
+          food.nameTr.toLowerCase().includes(needle) ||
+          food.name.toLowerCase().includes(needle) ||
+          food.category.toLowerCase().includes(needle)
         );
       }).slice(0, 10);
 
@@ -114,11 +134,75 @@ export function AddMealDialog({ connection, currentDate, onClose, foodItems, mea
 
       setSuggestions(normalized);
       setShowSuggestions(normalized.length > 0);
-      setIsSearching(false);
-    }, 200);
+      setSearchSource('local-fallback');
+      setSearchStatus(normalized.length > 0 ? 'results' : 'empty');
+      setSearchErrorMsg('');
+    };
 
-    return () => clearTimeout(debounceTimer);
-  }, [searchTerm]);
+    const runSupabaseSearch = async (): Promise<void> => {
+      // ilike escape — protect % and _ wildcards in user input
+      const escaped = searchTerm.replace(/%/g, '\\%').replace(/_/g, '\\_');
+      const pattern = `%${escaped}%`;
+      try {
+        const { data, error } = await supabase
+          .from('food_database')
+          .select('*')
+          .or(`name_tr.ilike."${pattern}",name.ilike."${pattern}"`)
+          .limit(10);
+
+        if (cancelled) return;
+
+        if (error) {
+          // Don't log the error object verbatim — it may contain query
+          // fragments. Log a generic marker instead.
+          console.error('[AddMealDialog] Supabase food_database search failed');
+          setSuggestions([]);
+          setShowSuggestions(false);
+          setSearchSource('supabase');
+          setSearchStatus('error');
+          setSearchErrorMsg(
+            'Veritabanına bağlanılamadı. Lütfen daha sonra tekrar deneyin veya manuel girin.'
+          );
+          return;
+        }
+
+        const rows = (data ?? []) as FoodDatabaseItem[];
+        setSuggestions(rows);
+        setShowSuggestions(rows.length > 0);
+        setSearchSource('supabase');
+        setSearchStatus(rows.length > 0 ? 'results' : 'empty');
+        setSearchErrorMsg('');
+      } catch {
+        if (cancelled) return;
+        console.error('[AddMealDialog] Supabase food_database search threw');
+        setSuggestions([]);
+        setShowSuggestions(false);
+        setSearchSource('supabase');
+        setSearchStatus('error');
+        setSearchErrorMsg(
+          'Veritabanına bağlanılamadı. Lütfen daha sonra tekrar deneyin veya manuel girin.'
+        );
+      }
+    };
+
+    setIsSearching(true);
+
+    const debounceTimer = setTimeout(() => {
+      if (supabaseReady) {
+        void runSupabaseSearch().finally(() => {
+          if (!cancelled) setIsSearching(false);
+        });
+      } else {
+        runLocalFallback();
+        setIsSearching(false);
+      }
+    }, 250);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(debounceTimer);
+    };
+  }, [searchTerm, supabaseReady]);
 
   const selectFood = (food: FoodDatabaseItem): void => {
     // 🔒 SECURITY: Sanitize all user-facing data to prevent XSS
@@ -229,11 +313,32 @@ export function AddMealDialog({ connection, currentDate, onClose, foodItems, mea
 
           {/* Search Bar */}
           <div className="space-y-2 relative">
-            <Label htmlFor="search">Yemek Ara</Label>
+            <div className="flex items-center justify-between">
+              <Label htmlFor="search">Yemek Ara</Label>
+              {/* Data-source badge — makes the active source obvious to the
+                  user and avoids "silent" empty/error states. */}
+              {!supabaseReady && (
+                <span
+                  data-testid="add-meal-search-source-offline"
+                  className="text-[11px] uppercase tracking-wide text-amber-700 bg-amber-100 border border-amber-300 rounded-full px-2 py-0.5"
+                >
+                  Çevrimdışı veritabanı
+                </span>
+              )}
+              {supabaseReady && searchSource === 'supabase' && searchStatus === 'results' && (
+                <span
+                  data-testid="add-meal-search-source-supabase"
+                  className="text-[11px] uppercase tracking-wide text-emerald-700 bg-emerald-100 border border-emerald-300 rounded-full px-2 py-0.5"
+                >
+                  Canlı veritabanı
+                </span>
+              )}
+            </div>
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
               <Input
                 id="search"
+                data-testid="add-meal-search-input"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 placeholder="Örn: Tavuk, Pilav, Salata..."
@@ -248,10 +353,14 @@ export function AddMealDialog({ connection, currentDate, onClose, foodItems, mea
 
             {/* Suggestions Dropdown */}
             {showSuggestions && suggestions.length > 0 && (
-              <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-64 overflow-y-auto">
+              <div
+                data-testid="add-meal-suggestions-list"
+                className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-64 overflow-y-auto"
+              >
                 {suggestions.map((food) => (
                   <button
                     key={food.id}
+                    data-testid={`add-meal-suggestion-${food.id}`}
                     onClick={() => selectFood(food)}
                     className="w-full text-left px-4 py-3 hover:bg-gray-50 border-b last:border-b-0 transition-colors"
                   >
@@ -273,11 +382,24 @@ export function AddMealDialog({ connection, currentDate, onClose, foodItems, mea
             )}
 
             {isSearching && (
-              <div className="text-sm text-gray-500 mt-1">🔍 Aranıyor...</div>
+              <div data-testid="add-meal-search-loading" className="text-sm text-gray-500 mt-1">
+                🔍 Aranıyor...
+              </div>
             )}
 
-            {searchTerm.length >= 2 && suggestions.length === 0 && !isSearching && (
-              <div className="text-sm text-gray-500 mt-1">❌ Sonuç bulunamadı. Manuel girebilirsiniz.</div>
+            {/* Empty / error / fallback messages — never silent. */}
+            {!isSearching && searchStatus === 'empty' && (
+              <div data-testid="add-meal-search-empty" className="text-sm text-gray-500 mt-1">
+                ❌ Sonuç bulunamadı. Manuel girebilirsiniz.
+              </div>
+            )}
+            {!isSearching && searchStatus === 'error' && (
+              <div
+                data-testid="add-meal-search-error"
+                className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-md p-2 mt-1"
+              >
+                ⚠️ {searchErrorMsg}
+              </div>
             )}
           </div>
 

@@ -9,6 +9,7 @@ import { Label } from './ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Search, Plus } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
+import { TURKISH_FOOD_DATABASE } from '@/lib/turkishFoodDatabase';
 import type { SupabaseConnection } from '@/hooks/useSupabase';
 import type { FoodItem } from '@/types/supabase';
 
@@ -69,46 +70,52 @@ export function AddMealDialog({ connection, currentDate, onClose, foodItems, mea
     mealType || getDefaultMealType()
   );
 
-  // Search food database
+  // Search local Turkish food database (in-memory, no Supabase round-trip).
+  // Replaces the previous `food_database` Supabase query which was unreliable
+  // in preview / unseeded environments. Manual entry still works below, and
+  // meal saving via Supabase `meals` table (handleAddMeal) is unchanged.
   useEffect(() => {
-    const searchFoodDatabase = async (): Promise<void> => {
-      if (searchTerm.trim().length < 2) {
-        setSuggestions([]);
-        setShowSuggestions(false);
-        return;
-      }
+    if (searchTerm.trim().length < 2) {
+      setSuggestions([]);
+      setShowSuggestions(false);
+      return;
+    }
 
-      setIsSearching(true);
-
-      try {
-        // 🔒 SECURITY: Use parameterized queries to prevent SQL injection
-        const searchPattern = `%${searchTerm.replace(/%/g, '\\%').replace(/_/g, '\\_')}%`;
-        
-        const { data, error } = await supabase
-          .from('food_database')
-          .select('*')
-          .or(`name_tr.ilike."${searchPattern}",name.ilike."${searchPattern}"`)
-          .limit(10);
-
-        if (error) {
-          console.error('Yemek arama hatası:', error);
-          setSuggestions([]);
-        } else if (data) {
-          setSuggestions(data as FoodDatabaseItem[]);
-          setShowSuggestions(true);
-        }
-      } catch (error) {
-        console.error('Yemek arama hatası:', error);
-        setSuggestions([]);
-      } finally {
-        setIsSearching(false);
-      }
-    };
+    setIsSearching(true);
 
     const debounceTimer = setTimeout(() => {
-      // Use void to explicitly ignore Promise (prevents React Error #310)
-      void searchFoodDatabase();
-    }, 300);
+      const needle = searchTerm.trim().toLowerCase();
+
+      const matches = TURKISH_FOOD_DATABASE.filter((food) => {
+        const nameTr = food.nameTr.toLowerCase();
+        const name = food.name.toLowerCase();
+        const category = food.category.toLowerCase();
+        return (
+          nameTr.includes(needle) ||
+          name.includes(needle) ||
+          category.includes(needle)
+        );
+      }).slice(0, 10);
+
+      const normalized: FoodDatabaseItem[] = matches.map((food, idx) => ({
+        id: `local-${idx}-${food.nameTr}`,
+        name: food.name,
+        name_tr: food.nameTr,
+        calories: food.calories,
+        protein: food.protein,
+        carbs: food.carbs,
+        fats: food.fat,
+        fiber: food.fiber,
+        category: food.category,
+        category_tr: food.category,
+        serving_size: '100g',
+        serving_size_tr: '100g',
+      }));
+
+      setSuggestions(normalized);
+      setShowSuggestions(normalized.length > 0);
+      setIsSearching(false);
+    }, 200);
 
     return () => clearTimeout(debounceTimer);
   }, [searchTerm]);

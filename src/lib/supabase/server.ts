@@ -19,8 +19,8 @@ if (!url || !serviceKey) {
 }
 
 export const supabaseAdmin = createClient<Database>(
-  url ?? 'http://localhost',
-  serviceKey ?? 'service-role-key-missing',
+  url || 'http://localhost',
+  serviceKey || 'service-role-key-missing',
   {
     auth: {
       persistSession: false,

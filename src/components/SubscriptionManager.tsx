@@ -10,7 +10,7 @@ import type { SupabaseConnection } from '@/hooks/useSupabase';
 import type { Subscription } from '@/types/supabase';
 import { toast } from 'sonner';
 import { useLanguage } from '@/contexts/LanguageContext';
-import { RevenueCatService } from '@/lib/revenuecat';
+import { RevenueCatService, type WebBillingOfferings, type WebBillingPackage } from '@/lib/revenuecat';
 import { Capacitor } from '@capacitor/core';
 import { broadcastSubscriptionChange } from '@/contexts/SubscriptionContext';
 import type { PurchasesOfferings, PurchasesPackage } from '@revenuecat/purchases-capacitor';
@@ -52,6 +52,7 @@ export function SubscriptionManager({ connection }: SubscriptionManagerProps) {
   const [subscriptionEndDate, setSubscriptionEndDate] = useState<string | null>(null);
   const [currency, setCurrency] = useState<'tr' | 'usd'>('tr');
   const [offerings, setOfferings] = useState<PurchasesOfferings | null>(null);
+  const [webOfferings, setWebOfferings] = useState<WebBillingOfferings | null>(null);
   const { t, language } = useLanguage();
 
   // Mirror premium status into localStorage under the key `useAIAccess` and
@@ -65,34 +66,12 @@ export function SubscriptionManager({ connection }: SubscriptionManagerProps) {
   };
 
   // Best-effort one-way sync from RevenueCat → Supabase `subscriptions`
-  // table so server-side checks (admin dashboard, future cron) can read a
-  // single source of truth. Failures are swallowed — the local snapshot
-  // (`fitto_subscription`) remains authoritative for the client.
-  const syncPremiumToSupabase = async (
-    isActive: boolean,
-    expiresAt: string | null,
-  ): Promise<void> => {
-    if (!connection?.supabase || !connection.userId) return;
-    try {
-      await connection.supabase
-        .from('subscriptions')
-        .upsert(
-          {
-            user_id: connection.userId,
-            plan_type: isActive ? 'premium' : 'free',
-            status: isActive ? 'active' : 'inactive',
-            started_at: new Date().toISOString(),
-            expires_at: expiresAt,
-            auto_renew: isActive,
-            ai_requests_used: 0,
-            ai_requests_limit: isActive ? 1000 : 10,
-          },
-          { onConflict: 'user_id' },
-        );
-    } catch (err) {
-      console.error('[Subscription] Supabase sync failed:', err);
-    }
-  };
+  // table is now handled by the server webhook at /api/revenuecat/webhook.
+  // The client must NOT write `plan_type='premium'` to Supabase — RLS on
+  // `subscriptions` allows self-writes today, so any client write is
+  // effectively a free upgrade. The local snapshot (`fitto_subscription`)
+  // remains authoritative for the in-session UI; the webhook updates the
+  // canonical Supabase row out-of-band.
 
   // Set currency based on GEOLOCATION (not language) for pricing security
   useEffect(() => {
@@ -141,10 +120,8 @@ export function SubscriptionManager({ connection }: SubscriptionManagerProps) {
                expiresAtIso = endDate.toISOString();
             }
             persistPremiumStatus(true, expiresAtIso);
-            void syncPremiumToSupabase(true, expiresAtIso);
           } else {
             persistPremiumStatus(false, null);
-            void syncPremiumToSupabase(false, null);
           }
 
           // Fetch Offerings (independent try/catch so a getOfferings
@@ -164,14 +141,12 @@ export function SubscriptionManager({ connection }: SubscriptionManagerProps) {
         }
       } 
       
-      // 2. Check Supabase (Web or sync fallback)
-      // Even if native, we might want to check Supabase if RevenueCat didn't return active
-      // But typically RevenueCat is the source of truth on mobile.
-      // For now, if NOT native, we definitely use Supabase.
+      // 2. WEB BRANCH — read entitlement from Supabase `subscriptions`
+      //    (populated server-side by the RevenueCat webhook), and fetch
+      //    Web Billing offerings for the checkout UI. The client never
+      //    writes `plan_type='premium'` here.
       if (!Capacitor.isNativePlatform()) {
         // Connection may not be ready yet (user signing in, hot reload, etc).
-        // Just bail out — the parent re-runs this effect when `connection`
-        // becomes non-null (it's listed in the dependency array).
         if (!connection || !connection.userId || !connection.supabase) return;
 
         try {
@@ -201,6 +176,18 @@ export function SubscriptionManager({ connection }: SubscriptionManagerProps) {
         } catch (error: unknown) {
           const errorMsg = error instanceof Error ? error.message : 'Unknown error';
           console.error('Subscription load error:', errorMsg);
+        }
+
+        // Fetch Web Billing offerings (best-effort; no-op if env key missing
+        // or SDK not yet configured). Safe to swallow errors — the upgrade
+        // button will fall back to a clear "not available" toast.
+        if (RevenueCatService.isWebBillingConfigured()) {
+          try {
+            const fetched = await RevenueCatService.getWebOfferings();
+            if (fetched) setWebOfferings(fetched);
+          } catch (offeringsError) {
+            console.error('RevenueCat Web Billing getOfferings error:', offeringsError);
+          }
         }
       }
     };
@@ -243,60 +230,71 @@ export function SubscriptionManager({ connection }: SubscriptionManagerProps) {
         const result = await RevenueCatService.purchasePackage(pkg);
         
         if (result?.customerInfo.entitlements.active['premium'] || result?.customerInfo.activeSubscriptions.length) {
-          // Success!
+          // Success — update local snapshot only. The canonical Supabase
+          // row is written by the RevenueCat webhook (server-side) so we
+          // never need a client-side write.
            setCurrentPlan('premium');
            const rcExpiresAt = result?.customerInfo.entitlements.active['premium']?.expirationDate ?? null;
            persistPremiumStatus(true, rcExpiresAt);
-           void syncPremiumToSupabase(true, rcExpiresAt);
            toast.success(t('subscription.upgradeSuccess'));
-           
-           // Optionally sync to Supabase here if you want web to know about mobile sub
-           // But usually you rely on webhooks from RevenueCat to your backend for that.
         } else {
            // User cancelled or failed
         }
       } 
-      // WEB FLOW (Supabase Simulation)
+      // WEB FLOW — RevenueCat Web Billing checkout (Stripe-backed)
       else {
-        const now = new Date();
-        let expiresAt: string | null = null;
-
-        if (planType === 'premium') {
-          const expires = new Date(now);
-          expires.setMonth(expires.getMonth() + 1);
-          expiresAt = expires.toISOString();
-        }
-
-        const { error } = await connection.supabase
-          .from('subscriptions')
-          .upsert({
-            user_id: connection.userId,
-            plan_type: planType as 'free' | 'premium' | 'trial',
-            status: 'active',
-            started_at: now.toISOString(),
-            expires_at: expiresAt,
-            auto_renew: true,
-            ai_requests_used: 0,
-            ai_requests_limit: planType === 'premium' ? 1000 : 10,
-          }, { onConflict: 'user_id' });
-
-        if (error) {
-          console.error('Upgrade error:', error);
-          toast.error(t('subscription.upgradeError') + ': ' + error.message);
+        if (planType !== 'premium') {
+          // Only the paid plan goes through Web Billing.
+          setIsLoading(false);
           return;
         }
 
-        setCurrentPlan(planType);
-        persistPremiumStatus(planType === 'premium', expiresAt);
-        if (expiresAt) {
-          const endDateObj = new Date(expiresAt);
-          const dateLocale = language === 'tr' ? 'tr-TR' : 'en-US';
-          setSubscriptionEndDate(endDateObj.toLocaleDateString(dateLocale));
-        } else {
-          setSubscriptionEndDate(null);
+        if (!RevenueCatService.isWebBillingConfigured()) {
+          toast.error(t('subscription.upgradeError') + ': Web Billing is not configured.');
+          setIsLoading(false);
+          return;
         }
 
-        toast.success(t('subscription.upgradeSuccess'));
+        // Pick the offering / package to purchase. Prefer the explicit
+        // "monthly" slot, then fall back to the first available package on
+        // the current offering.
+        const offering = webOfferings?.current ?? null;
+        const pkg: WebBillingPackage | undefined =
+          offering?.monthly ?? offering?.availablePackages?.[0];
+
+        if (!pkg) {
+          toast.error(t('subscription.upgradeError') + ': No package available.');
+          setIsLoading(false);
+          return;
+        }
+
+        const result = await RevenueCatService.purchaseWebPackage(pkg);
+        if (!result) {
+          // User cancelled or SDK failed silently. No toast on cancel.
+          setIsLoading(false);
+          return;
+        }
+
+        // Pull fresh customer info to reflect the new entitlement locally.
+        const info = await RevenueCatService.getWebCustomerInfo();
+        const premiumEnt = info?.entitlements?.active?.['premium'] ?? null;
+        const isActive =
+          !!premiumEnt ||
+          !!(info?.activeSubscriptions && Object.keys(info.activeSubscriptions).length > 0);
+        const expiresAtIso = premiumEnt?.expirationDate
+          ? premiumEnt.expirationDate.toISOString()
+          : null;
+
+        if (isActive) {
+          setCurrentPlan('premium');
+          persistPremiumStatus(true, expiresAtIso);
+          if (expiresAtIso) {
+            const endDateObj = new Date(expiresAtIso);
+            const dateLocale = language === 'tr' ? 'tr-TR' : 'en-US';
+            setSubscriptionEndDate(endDateObj.toLocaleDateString(dateLocale));
+          }
+          toast.success(t('subscription.upgradeSuccess'));
+        }
       }
     } catch (error: unknown) {
       const errorMsg = error instanceof Error ? error.message : 'Unknown error';

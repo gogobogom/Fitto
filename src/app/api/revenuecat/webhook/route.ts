@@ -105,6 +105,26 @@ export async function POST(req: Request): Promise<NextResponse> {
     return NextResponse.json({ ok: true, handled: false });
   }
 
+  // 3a. If RevenueCat includes entitlement_ids, only proceed when the
+  //     canonical "Fitto Premium" entitlement is among them. RC sends the
+  //     array on most subscription events; when it is missing or empty, we
+  //     fall back to event-type semantics (treat ACTIVATING events as
+  //     premium-granting).
+  const entitlementIds = Array.isArray(event.entitlement_ids)
+    ? event.entitlement_ids
+    : null;
+  if (
+    isActivating &&
+    entitlementIds !== null &&
+    entitlementIds.length > 0 &&
+    !entitlementIds.includes('Fitto Premium')
+  ) {
+    console.log(
+      `[rc-webhook] skipped ${eventType}: entitlement_ids does not include Fitto Premium`,
+    );
+    return NextResponse.json({ ok: true, handled: false });
+  }
+
   // 4. Only persist for valid Supabase-auth UUIDs (RevenueCat may send
   //    anonymous IDs like `$RCAnonymousID:…` which we cannot map to a row).
   if (!UUID_RE.test(userId)) {

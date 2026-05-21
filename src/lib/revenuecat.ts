@@ -28,10 +28,62 @@ import { Capacitor } from '@capacitor/core';
 // are only inlined into the mobile bundle by the `build:mobile` step. They
 // are NOT exposed to the public web bundle.
 const WEB_BILLING_API_KEY: string | undefined =
-  process.env.NEXT_PUBLIC_REVENUECAT_WEB_BILLING_API_KEY;
+  process.env.NEXT_PUBLIC_REVENUECAT_WEB_BILLING_API_KEY ??
+  process.env.NEXT_PUBLIC_REVENUECAT_API_KEY;
 const IOS_API_KEY: string | undefined = process.env.REVENUECAT_IOS_API_KEY;
 const ANDROID_API_KEY: string | undefined =
   process.env.REVENUECAT_ANDROID_API_KEY;
+
+// ---------------------------------------------------------------------------
+// Entitlement / product identifiers (must match the RevenueCat dashboard)
+// ---------------------------------------------------------------------------
+/**
+ * The single canonical entitlement that unlocks every paid Fitto feature
+ * (AI Coach, advanced analytics, AI photo meal analysis). Configured in the
+ * RevenueCat dashboard with the exact identifier `Fitto Premium` (case and
+ * space matter).
+ */
+export const PREMIUM_ENTITLEMENT_ID = 'Fitto Premium';
+
+/** Product identifiers configured in the RevenueCat dashboard. */
+export const PRODUCT_IDS = {
+  monthly: 'monthly',
+  yearly: 'yearly',
+} as const;
+
+// ---------------------------------------------------------------------------
+// Anonymous user-id persistence
+// ---------------------------------------------------------------------------
+// RevenueCat's web SDK requires a non-empty `appUserId` at configure-time.
+// When the Fitto user is not yet authenticated with Supabase, we use a
+// stable anonymous id persisted in localStorage so subscription continuity
+// survives page refreshes. On sign-in we `identifyUser()` to alias the
+// anonymous id onto the real Supabase user id (RC creates the alias
+// server-side, so the entitlement follows the user).
+const ANONYMOUS_ID_STORAGE_KEY = 'fitto_rc_anonymous_id';
+
+function getOrCreateAnonymousAppUserId(): string {
+  if (typeof window === 'undefined' || !window.localStorage) {
+    // SSR safety net — should never be hit because all callers are gated on
+    // `typeof window` first, but return a deterministic placeholder anyway.
+    return 'anon-ssr';
+  }
+  const existing = window.localStorage.getItem(ANONYMOUS_ID_STORAGE_KEY);
+  if (existing && existing.length > 0) return existing;
+  // Prefer the platform crypto UUID; fall back to a timestamped random for
+  // ancient browsers that lack `crypto.randomUUID`.
+  const fresh =
+    typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+      ? `anon_${crypto.randomUUID()}`
+      : `anon_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+  try {
+    window.localStorage.setItem(ANONYMOUS_ID_STORAGE_KEY, fresh);
+  } catch {
+    // localStorage may be disabled (private mode); the id is still useful
+    // for the current page even if it won't survive refresh.
+  }
+  return fresh;
+}
 
 // Re-export the native types so callers don't depend on the package directly.
 export type {
@@ -121,10 +173,14 @@ export class RevenueCatService {
 
   /**
    * Initialize the Web Billing SDK. No-op on native or when running on the
-   * server. Idempotent for the same `userId`; calling again with a different
-   * userId will switch the active user via `changeUser`.
+   * server. If `userId` is omitted/null, configures the SDK with a stable
+   * anonymous id persisted in localStorage so subscription continuity
+   * survives page refresh. Idempotent — calling again with a different
+   * userId switches the active user via `identifyUser` (which aliases an
+   * anonymous id onto the real Supabase user id when transitioning from
+   * unauth → auth).
    */
-  static async initWeb({ userId }: { userId: string }): Promise<void> {
+  static async initWeb({ userId }: { userId?: string | null } = {}): Promise<void> {
     if (Capacitor.isNativePlatform()) return;
     if (typeof window === 'undefined') return;
     if (!WEB_BILLING_API_KEY) {
@@ -132,7 +188,11 @@ export class RevenueCatService {
       // error only if the user actively tries to buy.
       return;
     }
-    if (!userId) return;
+
+    // Resolve the effective appUserId: prefer the Supabase user id; fall
+    // back to a stable anonymous id from localStorage.
+    const effectiveUserId =
+      userId && userId.length > 0 ? userId : getOrCreateAnonymousAppUserId();
 
     const mod = await loadWebModule();
     if (!mod) return;
@@ -140,22 +200,23 @@ export class RevenueCatService {
 
     try {
       if (Purchases.isConfigured()) {
-        // SDK already configured this session. Switch user if needed.
         const current = Purchases.getSharedInstance();
         webInstance = current;
-        if (this.webInitializedFor !== userId) {
-          await current.changeUser(userId);
-          this.webInitializedFor = userId;
+        if (this.webInitializedFor !== effectiveUserId) {
+          // identifyUser aliases anonymous → user when applicable; falls back
+          // to changeUser semantics if the previous id was not anonymous.
+          await current.identifyUser(effectiveUserId);
+          this.webInitializedFor = effectiveUserId;
         }
         return;
       }
 
       webInstance = Purchases.configure({
         apiKey: WEB_BILLING_API_KEY,
-        appUserId: userId,
+        appUserId: effectiveUserId,
       });
-      this.webInitializedFor = userId;
-    } catch (err) {
+      this.webInitializedFor = effectiveUserId;
+    } catch {
       console.error('[RevenueCat] web init failed');
       // Do not re-throw — keep app responsive.
     }
@@ -188,10 +249,13 @@ export class RevenueCatService {
       return;
     }
     try {
-      await webInstance.changeUser(userId);
+      // identifyUser handles both cases:
+      //   • previous id was anonymous → aliases anon → user (RC server-side)
+      //   • previous id was a real user → swaps the active user id
+      await webInstance.identifyUser(userId);
       this.webInitializedFor = userId;
-    } catch (err) {
-      console.error('[RevenueCat] web changeUser failed');
+    } catch {
+      console.error('[RevenueCat] web identifyUser failed');
     }
   }
 
@@ -265,8 +329,43 @@ export class RevenueCatService {
     if (!webInstance) return null;
     try {
       return await webInstance.getOfferings();
-    } catch (err) {
+    } catch {
       console.error('[RevenueCat] getWebOfferings failed');
+      return null;
+    }
+  }
+
+  /**
+   * Opens the RevenueCat-hosted paywall (full-screen overlay) for the
+   * current offering, which is configured in the RevenueCat dashboard with
+   * the `monthly` and `yearly` packages. The paywall renders RC's own UI
+   * components and runs the Stripe-backed Web Billing checkout end-to-end.
+   *
+   * Resolves with the PurchaseResult on success, or `null` on user-cancel
+   * / failure (the SDK throws on cancel; we map that to null so callers can
+   * treat it the same as "no purchase yet").
+   */
+  static async presentWebPaywall(): Promise<WebPurchaseResult | null> {
+    if (Capacitor.isNativePlatform()) return null;
+    if (typeof window === 'undefined') return null;
+    if (!webInstance) return null;
+    try {
+      const offerings = await webInstance.getOfferings();
+      const offering = offerings?.current ?? null;
+      if (!offering) {
+        console.error('[RevenueCat] No current offering configured in dashboard');
+        return null;
+      }
+      return await webInstance.presentPaywall({ offering });
+    } catch (err: unknown) {
+      // ErrorCode.UserCancelledError === 1 in the SDK enum.
+      const errorCode =
+        typeof err === 'object' && err !== null && 'errorCode' in err
+          ? (err as { errorCode?: unknown }).errorCode
+          : undefined;
+      if (errorCode !== 1) {
+        console.error('[RevenueCat] presentWebPaywall failed');
+      }
       return null;
     }
   }
@@ -319,3 +418,19 @@ export class RevenueCatService {
 // type their UI state without importing the SDK directly.
 export type WebBillingPackage = WebPackage;
 export type WebBillingOfferings = WebOfferings;
+
+// ---------------------------------------------------------------------------
+// Entitlement checks
+// ---------------------------------------------------------------------------
+/**
+ * Returns true iff the given CustomerInfo has the canonical Fitto Premium
+ * entitlement active. Accepts either the native or the web CustomerInfo
+ * shape — both have `entitlements.active` as a string-keyed map.
+ */
+export function isPremiumActive(info: unknown): boolean {
+  if (!info || typeof info !== 'object') return false;
+  const ent = (info as { entitlements?: { active?: Record<string, unknown> } })
+    .entitlements;
+  if (!ent || !ent.active) return false;
+  return !!ent.active[PREMIUM_ENTITLEMENT_ID];
+}

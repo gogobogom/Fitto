@@ -10,7 +10,10 @@ import type { SupabaseConnection } from '@/hooks/useSupabase';
 import type { Subscription } from '@/types/supabase';
 import { toast } from 'sonner';
 import { useLanguage } from '@/contexts/LanguageContext';
-import { RevenueCatService, type WebBillingOfferings, type WebBillingPackage } from '@/lib/revenuecat';
+import {
+  RevenueCatService,
+  PREMIUM_ENTITLEMENT_ID,
+} from '@/lib/revenuecat';
 import { Capacitor } from '@capacitor/core';
 import { broadcastSubscriptionChange } from '@/contexts/SubscriptionContext';
 import type { PurchasesOfferings, PurchasesPackage } from '@revenuecat/purchases-capacitor';
@@ -52,7 +55,6 @@ export function SubscriptionManager({ connection }: SubscriptionManagerProps) {
   const [subscriptionEndDate, setSubscriptionEndDate] = useState<string | null>(null);
   const [currency, setCurrency] = useState<'tr' | 'usd'>('tr');
   const [offerings, setOfferings] = useState<PurchasesOfferings | null>(null);
-  const [webOfferings, setWebOfferings] = useState<WebBillingOfferings | null>(null);
   const { t, language } = useLanguage();
 
   // Mirror premium status into localStorage under the key `useAIAccess` and
@@ -103,21 +105,20 @@ export function SubscriptionManager({ connection }: SubscriptionManagerProps) {
       // 1. Check Native Platform (RevenueCat)
       if (Capacitor.isNativePlatform()) {
         try {
-          // Check Status
+          // Check Status — explicitly look for the canonical "Fitto Premium"
+          // entitlement rather than "any active subscription", so legacy or
+          // unrelated entitlements never inadvertently unlock premium.
           const customerInfo = await RevenueCatService.getCustomerInfo();
-          if (customerInfo?.activeSubscriptions && customerInfo.activeSubscriptions.length > 0) {
-            // Assume premium if any subscription is active for now
-            // You can refine this to check specific entitlements
+          const premiumEntitlement =
+            customerInfo?.entitlements?.active?.[PREMIUM_ENTITLEMENT_ID] ?? null;
+          if (premiumEntitlement) {
             setCurrentPlan('premium');
-            
-            // Try to get expiration date from entitlement
-            const entitlement = Object.values(customerInfo.entitlements.active)[0];
             let expiresAtIso: string | null = null;
-            if (entitlement && entitlement.expirationDate) {
-               const endDate = new Date(entitlement.expirationDate);
-               const dateLocale = language === 'tr' ? 'tr-TR' : 'en-US';
-               setSubscriptionEndDate(endDate.toLocaleDateString(dateLocale));
-               expiresAtIso = endDate.toISOString();
+            if (premiumEntitlement.expirationDate) {
+              const endDate = new Date(premiumEntitlement.expirationDate);
+              const dateLocale = language === 'tr' ? 'tr-TR' : 'en-US';
+              setSubscriptionEndDate(endDate.toLocaleDateString(dateLocale));
+              expiresAtIso = endDate.toISOString();
             }
             persistPremiumStatus(true, expiresAtIso);
           } else {
@@ -178,17 +179,9 @@ export function SubscriptionManager({ connection }: SubscriptionManagerProps) {
           console.error('Subscription load error:', errorMsg);
         }
 
-        // Fetch Web Billing offerings (best-effort; no-op if env key missing
-        // or SDK not yet configured). Safe to swallow errors — the upgrade
-        // button will fall back to a clear "not available" toast.
-        if (RevenueCatService.isWebBillingConfigured()) {
-          try {
-            const fetched = await RevenueCatService.getWebOfferings();
-            if (fetched) setWebOfferings(fetched);
-          } catch (offeringsError) {
-            console.error('RevenueCat Web Billing getOfferings error:', offeringsError);
-          }
-        }
+        // Fetch Web Billing offerings is no longer needed here — the
+        // `presentWebPaywall()` flow fetches the current offering internally
+        // and renders the RC-hosted paywall UI.
       }
     };
 
@@ -229,22 +222,26 @@ export function SubscriptionManager({ connection }: SubscriptionManagerProps) {
 
         const result = await RevenueCatService.purchasePackage(pkg);
         
-        if (result?.customerInfo.entitlements.active['premium'] || result?.customerInfo.activeSubscriptions.length) {
+        const nativePremiumEnt =
+          result?.customerInfo.entitlements.active[PREMIUM_ENTITLEMENT_ID] ?? null;
+        if (nativePremiumEnt) {
           // Success — update local snapshot only. The canonical Supabase
           // row is written by the RevenueCat webhook (server-side) so we
           // never need a client-side write.
            setCurrentPlan('premium');
-           const rcExpiresAt = result?.customerInfo.entitlements.active['premium']?.expirationDate ?? null;
+           const rcExpiresAt = nativePremiumEnt.expirationDate ?? null;
            persistPremiumStatus(true, rcExpiresAt);
            toast.success(t('subscription.upgradeSuccess'));
         } else {
            // User cancelled or failed
         }
       } 
-      // WEB FLOW — RevenueCat Web Billing checkout (Stripe-backed)
+      // WEB FLOW — RevenueCat-hosted paywall (Stripe-backed Web Billing).
+      // Renders RC's own full-screen UI that shows the current offering
+      // (`monthly` + `yearly` packages configured in the RC dashboard).
       else {
         if (planType !== 'premium') {
-          // Only the paid plan goes through Web Billing.
+          // Only the paid plan goes through the paywall.
           setIsLoading(false);
           return;
         }
@@ -255,37 +252,35 @@ export function SubscriptionManager({ connection }: SubscriptionManagerProps) {
           return;
         }
 
-        // Pick the offering / package to purchase. Prefer the explicit
-        // "monthly" slot, then fall back to the first available package on
-        // the current offering.
-        const offering = webOfferings?.current ?? null;
-        const pkg: WebBillingPackage | undefined =
-          offering?.monthly ?? offering?.availablePackages?.[0];
-
-        if (!pkg) {
-          toast.error(t('subscription.upgradeError') + ': No package available.');
+        // Pre-flight: confirm a current offering exists in the RC dashboard
+        // BEFORE opening the paywall, so we can surface a clear message if
+        // the offering isn't wired up yet.
+        const preflight = await RevenueCatService.getWebOfferings();
+        if (!preflight?.current) {
+          toast.error(
+            t('subscription.upgradeError') +
+              ': No active offering in RevenueCat dashboard yet.',
+          );
           setIsLoading(false);
           return;
         }
 
-        const result = await RevenueCatService.purchaseWebPackage(pkg);
+        const result = await RevenueCatService.presentWebPaywall();
         if (!result) {
-          // User cancelled or SDK failed silently. No toast on cancel.
+          // User cancelled or paywall closed without a purchase.
           setIsLoading(false);
           return;
         }
 
-        // Pull fresh customer info to reflect the new entitlement locally.
+        // Re-fetch CustomerInfo to confirm the Fitto Premium entitlement.
         const info = await RevenueCatService.getWebCustomerInfo();
-        const premiumEnt = info?.entitlements?.active?.['premium'] ?? null;
-        const isActive =
-          !!premiumEnt ||
-          !!(info?.activeSubscriptions && Object.keys(info.activeSubscriptions).length > 0);
-        const expiresAtIso = premiumEnt?.expirationDate
-          ? premiumEnt.expirationDate.toISOString()
+        const webPremiumEnt =
+          info?.entitlements?.active?.[PREMIUM_ENTITLEMENT_ID] ?? null;
+        const expiresAtIso = webPremiumEnt?.expirationDate
+          ? webPremiumEnt.expirationDate.toISOString()
           : null;
 
-        if (isActive) {
+        if (webPremiumEnt) {
           setCurrentPlan('premium');
           persistPremiumStatus(true, expiresAtIso);
           if (expiresAtIso) {

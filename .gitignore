@@ -115,3 +115,6 @@ credentials.json
 *.pem
 *.key
 .credentials
+
+# TypeScript incremental build cache — auto-generated, never commit.
+*.tsbuildinfo

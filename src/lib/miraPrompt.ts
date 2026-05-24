@@ -505,6 +505,61 @@ function intentRules(locale: Locale): string {
 }
 
 /**
+ * Lightweight food-intent detector. Used to bias the appended guidance
+ * toward "concrete recipe first" when the user clearly wants food, even
+ * if their phrasing is short / frustrated / ambiguous. We deliberately
+ * accept false positives — a brief recipe-shaped answer is acceptable
+ * even when the user only loosely implies they want food, because the
+ * alternative (Railway RAG returning a generic protein lecture) is the
+ * P0 we are fixing.
+ *
+ * Returns `true` for messages like:
+ *   • "bana bir öğün öner" / "give me a meal"
+ *   • "tavuk olsun" / "make it chicken"
+ *   • "yemek tarifi neden vermiyorsun" / "why no recipe"
+ *   • "e bana yemek önersene"
+ *   • "kahvaltıda ne yiyeyim" / "what should I eat for dinner"
+ *
+ * Returns `false` for:
+ *   • pure emotion ("canım sıkkın", "I'm sad")
+ *   • macro/nutrient questions
+ *   • plan / schedule questions ("haftalık plan", "weekly plan")
+ *   • generic "what should I do"
+ */
+export function detectFoodIntent(userQuestion: string): boolean {
+  const q = userQuestion.trim().toLowerCase();
+  if (q.length === 0) return false;
+
+  // Pure emotional venting → not food intent, even if the word "tarif"
+  // appears in a negation like "tarif istemiyorum".
+  if (/(istemiyorum|don['']?t want|no recipe|not hungry)/i.test(q)) {
+    // BUT — "yemek tarifi neden vermiyorsun" / "why aren't you giving a
+    // recipe" IS food intent (frustrated user asking for a recipe).
+    if (/(neden vermiyor|why (aren['']?t you|no|don['']?t you (give|share)))/i.test(q)) {
+      return true;
+    }
+    return false;
+  }
+
+  const FOOD_KEYWORDS_TR = [
+    'yemek', 'öğün', 'ogun', 'tarif', 'kahvaltı', 'kahvalti', 'öğle', 'ogle',
+    'akşam', 'aksam', 'atıştır', 'atistir', 'snack', 'aperatif',
+    'tavuk', 'et', 'balık', 'balik', 'salata', 'çorba', 'corba',
+    'makarna', 'pilav', 'sandviç', 'sandvic', 'tost', 'mercimek',
+    'önersene', 'onersene', 'öner', 'oner', 'ne yiyeyim', 'ne yapsam',
+  ];
+  const FOOD_KEYWORDS_EN = [
+    'meal', 'recipe', 'breakfast', 'lunch', 'dinner', 'snack', 'brunch',
+    'chicken', 'beef', 'fish', 'salad', 'soup', 'pasta', 'rice', 'sandwich',
+    'suggest a meal', 'suggest something to eat', 'what should i eat',
+    'what to eat', 'recommend a meal', 'what can i cook',
+  ];
+  for (const kw of FOOD_KEYWORDS_TR) if (q.includes(kw)) return true;
+  for (const kw of FOOD_KEYWORDS_EN) if (q.includes(kw)) return true;
+  return false;
+}
+
+/**
  * Compact one-line-per-intent guidance. Replaces the old multi-block
  * scaffold (miraRules + coachingKnowledge + intentRules) that used to
  * be prepended to every message. The old block put ~80+ lines of food
@@ -515,33 +570,53 @@ function intentRules(locale: Locale): string {
  * on the user's actual words. It also avoids forcing every reply into
  * "dish name / ingredients / steps / kcal / macros" format.
  */
-function compactGuidance(locale: Locale): string {
+function compactGuidance(locale: Locale, foodIntent: boolean = false): string {
   if (locale === 'tr') {
-    return [
+    const lines = [
       'YANIT KURALLARI (kısa):',
       "- Sen Mira'sın: sıcak, kararlı, pratik bir wellness koçu. Açılış selamı verme, yansıtma yapma, klişe doldurma yapma.",
       '- Cevabı kullanıcının niyetine göre seç:',
-      '  • Yemek/tarif/atıştırmalık isteği → somut yemek adı, miktarlı malzemeler, 2-4 adım, kabaca kalori + protein/karb/yağ, gerekirse 1 akıllı değişim. DNA alerji/sevmediklerini ASLA kullanma.',
-      "  • Motivasyon / düşük ruh hali / 'tarif verme' → tarif ÜRETME. 1 kısa empati cümlesi + 1 somut sonraki adım (örn. 10 dk yürüyüş, 2 bardak su, oturarak nefes egzersizi) + 1 pratik koçluk notu.",
+      '  • Yemek/tarif/atıştırmalık/öğün isteği → somut yemek adı, miktarlı malzemeler, 2-4 adım, kabaca kalori + protein/karb/yağ, gerekirse 1 akıllı değişim. DNA alerji/sevmediklerini ASLA kullanma. Sadece protein/makro dersi VERME.',
+      "  • Tek malzeme/kısıt belirtilirse (örn. 'tavuk olsun', 'mercimek olsun') → o malzemeyi içeren SOMUT bir tarif ver. Genel besin değeri açıklaması yapma.",
+      "  • 'bana bir öğün öner' / 'ne yiyeyim' gibi açık ama yönsüz istek → 2-3 SOMUT öğün seçeneği (her biri 1 satır + kaba kcal). Protein dersi verme.",
+      "  • 'yemek tarifi neden vermiyorsun?' / 'tarif versene' → kısa onayla (1 cümle) sonra DOĞRUDAN 1 somut tarif ver. Bahane uzatma.",
+      "  • Duygusal — düşük ruh hali, sıkılma, stres VE yemek istemediğini açıkça söylediyse → tarif ÜRETME. 1 kısa empati cümlesi + 1 somut sonraki adım (örn. 10 dk yürüyüş, 2 bardak su, oturarak nefes egzersizi).",
       '  • Bilgi / "neden" / açıklama → MASTER_VERI bilgisini kullanarak net ve kısa açıkla; gereksiz tarif önerme.',
       "  • Aşırı yedikten sonra ne yapmalı → AÇ KALMAYI ÖNERME. Toparlanma rehberliği ver: bol su, hafif protein+sebze, yürüyüş, ertesi günü normal yemek.",
       '  • Makro/kalori sorusu → sayısal, kısa.',
       '- Wellness DNA: alerji/sevmediği yiyecekleri ASLA önerme. Low-carb kullanıcıda yüksek karbonhidratlı malzemeleri öneri olarak değil, sadece "kaçın/sınırla" çerçevesinde an.',
+      '- Tıbbi tanı/tedavi iddiası YOK. Doktor/diyetisyen yerine geçme.',
       '- Cevap TÜRKÇE olsun, karışık dil olmasın. ≤ 180 kelime, en fazla 1-2 emoji. Her cevabı soruyla bitirme.',
-    ].join('\n');
+    ];
+    if (foodIntent) {
+      lines.unshift(
+        'YEMEK-ÖNCE MODU AKTİF: kullanıcı yemek/tarif/öğün/tavuk vb. istiyor. ÖNCE somut bir tarif/öneri ver (yemek adı + porsiyonlu malzemeler + 2-4 adım + kaba kcal). Genel "protein şu kadar olmalı" dersi VERME. Açıklama gerekiyorsa tarifi verdikten SONRA 1-2 cümle.',
+      );
+    }
+    return lines.join('\n');
   }
-  return [
+  const lines = [
     'REPLY RULES (short):',
     "- You are Mira: warm, decisive, practical wellness coach. No opening greeting, no mirroring, no filler.",
     "- Pick the mode by user intent:",
-    '  • Food/recipe/snack request → concrete dish name, portioned ingredients, 2-4 steps, rough kcal + protein/carb/fat, one smart swap if useful. Never use DNA allergies/dislikes.',
-    "  • Motivation / low mood / 'no recipe' → DO NOT generate a recipe. One short empathy line + one concrete next step (10-min walk, 2 glasses of water, 60-sec breathing) + one practical coaching note.",
+    '  • Food/recipe/snack/meal request → concrete dish name, portioned ingredients, 2-4 steps, rough kcal + protein/carb/fat, one smart swap if useful. Never use DNA allergies/dislikes. Do NOT default to a protein/macro lecture.',
+    "  • Single-ingredient constraint (e.g. 'make it chicken', 'with lentils') → give a CONCRETE recipe featuring that ingredient. No general nutrient explanation.",
+    "  • 'suggest a meal' / 'what should I eat' / open-ended but pointed → 2-3 CONCRETE meal options (1 line each + rough kcal). No protein lecture.",
+    "  • 'why aren't you giving a recipe?' / 'just give me a recipe' → briefly acknowledge (1 sentence), then DIRECTLY give a concrete recipe. No long apology.",
+    "  • Emotional — low mood, boredom, stress AND user explicitly says they don't want food → DO NOT generate a recipe. One short empathy line + one concrete next step (10-min walk, 2 glasses of water, 60-sec breathing).",
     '  • Explanation / "why" question → answer clearly using MASTER_VERI knowledge; do NOT push a recipe.',
     '  • After overeating → DO NOT tell them to starve. Give recovery guidance: hydrate, light protein+veg, walk, eat normally the next day.',
     '  • Macros/calories → numeric, brief.',
     '- Wellness DNA: never suggest allergies/disliked foods. For low-carb users, frame high-carb items as "avoid/limit", not as suggestions.',
+    '- No medical diagnosis/treatment claims. Do not replace a doctor / dietitian.',
     "- Reply in the user's language, no mixing. ≤ 180 words, at most 1-2 emojis. Do not end every reply with a question.",
-  ].join('\n');
+  ];
+  if (foodIntent) {
+    lines.unshift(
+      'FOOD-FIRST MODE ON: the user is asking for a meal/recipe/snack/specific food. Lead with a CONCRETE recipe/suggestion (dish name + portioned ingredients + 2-4 steps + rough kcal). Do NOT open with a generic "protein should be X" lecture. If explanation is needed, put it AFTER the recipe in 1-2 sentences.',
+    );
+  }
+  return lines.join('\n');
 }
 
 /**
@@ -628,7 +703,7 @@ export function buildMiraQuestion(params: {
 
   // --- 3) Minimal intent-aware guidance — short, after the question. ---
   blockLines.push('');
-  blockLines.push(compactGuidance(locale));
+  blockLines.push(compactGuidance(locale, detectFoodIntent(userQuestion)));
 
   return blockLines.join('\n');
 }

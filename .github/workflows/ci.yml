@@ -28,7 +28,13 @@ jobs:
         uses: actions/setup-node@v4
         with:
           # @capacitor/cli@8 requires Node >=22; matches the project's runtime.
-          node-version: '22'
+          # Pinned to 22.22.1 because the strictest engine across our locked
+          # transitive deps is lint-staged@17.0.4 (engines.node = >=22.22.1).
+          # eslint-visitor-keys@5.0.1, listr2, and others require >=22.13;
+          # 22.22.1 satisfies all of them. Bumping `node-version: '22'` to
+          # this explicit minor avoids the GitHub-hosted runner serving a
+          # cached 22.12.x that fails `yarn install --frozen-lockfile`.
+          node-version: '22.22.1'
           cache: 'yarn'
 
       - name: Install dependencies

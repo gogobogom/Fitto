@@ -110,6 +110,13 @@ export interface ISubscriptionProvider {
   isConfigured(): boolean;
 
   /**
+   * One-shot SDK boot. Safe to call multiple times. Pass a `userId` if
+   * already authenticated, otherwise the provider should configure with
+   * a stable anonymous id (persisted across page refreshes when possible).
+   */
+  init(options?: { userId?: string | null }): Promise<void>;
+
+  /**
    * Look up the current user's subscription status. May be called as often
    * as needed; implementations should cache internally where appropriate.
    */

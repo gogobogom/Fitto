@@ -20,6 +20,10 @@ export class NoopSubscriptionProvider implements ISubscriptionProvider {
     return false;
   }
 
+  async init(_options?: { userId?: string | null }): Promise<void> {
+    void _options;
+  }
+
   async getCustomerStatus(_userId?: string): Promise<SubscriptionStatus> {
     void _userId;
     return {

@@ -61,6 +61,13 @@ export class RevenueCatProvider implements ISubscriptionProvider {
     return RevenueCatService.isWebBillingConfigured();
   }
 
+  async init(options?: { userId?: string | null }): Promise<void> {
+    if (typeof window === 'undefined') return;
+    // RC web SDK persists an anonymous id in localStorage when no userId is
+    // passed, so calling init() unauthenticated is safe and recommended.
+    await RevenueCatService.initWeb({ userId: options?.userId ?? null });
+  }
+
   async getCustomerStatus(_userId?: string): Promise<SubscriptionStatus> {
     void _userId; // RC tracks identity via its own SDK state
     if (typeof window === 'undefined') return FREE_STATUS;

@@ -10,6 +10,15 @@ import type { SupabaseConnection } from '@/hooks/useSupabase';
 import type { Subscription } from '@/types/supabase';
 import { toast } from 'sonner';
 import { useLanguage } from '@/contexts/LanguageContext';
+// Web purchase flow goes through the generic ISubscriptionProvider abstraction.
+import { getSubscriptionProvider } from '@/lib/subscriptions';
+// Native (iOS / Android Capacitor) keeps importing the RevenueCat service
+// directly because the per-package SKU UI below (price strings, plan
+// matching) consumes RC's `PurchasesPackage` / `PurchasesOfferings` types.
+// Migrating native to the abstraction would change those data shapes and
+// therefore the per-package pricing UI — out of scope for this pure
+// refactor. Follow-up task: extend ISubscriptionProvider with vendor-
+// agnostic offering/package types so native can also go through it.
 import {
   RevenueCatService,
   PREMIUM_ENTITLEMENT_ID,
@@ -236,9 +245,9 @@ export function SubscriptionManager({ connection }: SubscriptionManagerProps) {
            // User cancelled or failed
         }
       } 
-      // WEB FLOW — RevenueCat-hosted paywall (Stripe-backed Web Billing).
-      // Renders RC's own full-screen UI that shows the current offering
-      // (`monthly` + `yearly` packages configured in the RC dashboard).
+      // WEB FLOW — provider-agnostic. Routed through ISubscriptionProvider.
+      // Today's adapter is RevenueCat Web Billing; tomorrow's could be
+      // Adapty / Paddle / Lemon Squeezy. The UI doesn't care.
       else {
         if (planType !== 'premium') {
           // Only the paid plan goes through the paywall.
@@ -246,45 +255,33 @@ export function SubscriptionManager({ connection }: SubscriptionManagerProps) {
           return;
         }
 
-        if (!RevenueCatService.isWebBillingConfigured()) {
-          toast.error(t('subscription.upgradeError') + ': Web Billing is not configured.');
+        const provider = getSubscriptionProvider();
+        const result = await provider.presentPaywall();
+
+        if (!result.purchased) {
+          if (result.reason === 'not_configured') {
+            toast.error(
+              t('subscription.upgradeError') + ': Web Billing is not configured.',
+            );
+          } else if (result.reason === 'no_offering_configured') {
+            toast.error(
+              t('subscription.upgradeError') +
+                ': No active offering in RevenueCat dashboard yet.',
+            );
+          }
+          // `user_cancelled` / `sdk_unavailable` / `unknown_error` →
+          // intentionally silent (UI stays on the plan card; user can retry).
           setIsLoading(false);
           return;
         }
 
-        // Pre-flight: confirm a current offering exists in the RC dashboard
-        // BEFORE opening the paywall, so we can surface a clear message if
-        // the offering isn't wired up yet.
-        const preflight = await RevenueCatService.getWebOfferings();
-        if (!preflight?.current) {
-          toast.error(
-            t('subscription.upgradeError') +
-              ': No active offering in RevenueCat dashboard yet.',
-          );
-          setIsLoading(false);
-          return;
-        }
-
-        const result = await RevenueCatService.presentWebPaywall();
-        if (!result) {
-          // User cancelled or paywall closed without a purchase.
-          setIsLoading(false);
-          return;
-        }
-
-        // Re-fetch CustomerInfo to confirm the Fitto Premium entitlement.
-        const info = await RevenueCatService.getWebCustomerInfo();
-        const webPremiumEnt =
-          info?.entitlements?.active?.[PREMIUM_ENTITLEMENT_ID] ?? null;
-        const expiresAtIso = webPremiumEnt?.expirationDate
-          ? webPremiumEnt.expirationDate.toISOString()
-          : null;
-
-        if (webPremiumEnt) {
+        // Re-read the user's subscription status to confirm the entitlement.
+        const status = await provider.getCustomerStatus();
+        if (status.isActive) {
           setCurrentPlan('premium');
-          persistPremiumStatus(true, expiresAtIso);
-          if (expiresAtIso) {
-            const endDateObj = new Date(expiresAtIso);
+          persistPremiumStatus(true, status.expiresAt);
+          if (status.expiresAt) {
+            const endDateObj = new Date(status.expiresAt);
             const dateLocale = language === 'tr' ? 'tr-TR' : 'en-US';
             setSubscriptionEndDate(endDateObj.toLocaleDateString(dateLocale));
           }

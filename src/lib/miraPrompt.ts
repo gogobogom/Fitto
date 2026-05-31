@@ -547,12 +547,16 @@ export function detectFoodIntent(userQuestion: string): boolean {
     'tavuk', 'et', 'balık', 'balik', 'salata', 'çorba', 'corba',
     'makarna', 'pilav', 'sandviç', 'sandvic', 'tost', 'mercimek',
     'önersene', 'onersene', 'öner', 'oner', 'ne yiyeyim', 'ne yapsam',
+    'yiyebilirim', 'yiyebil', 'ye', 'yiy', 'yiyecek', 'diyet', 'öğünü', 'önerisi',
+    'tarifi', 'besin', 'kalori', 'karbonhidrat', 'yağ', 'protein', 'pişir', 'pisir',
+    'hazırla', 'hazirla'
   ];
   const FOOD_KEYWORDS_EN = [
     'meal', 'recipe', 'breakfast', 'lunch', 'dinner', 'snack', 'brunch',
     'chicken', 'beef', 'fish', 'salad', 'soup', 'pasta', 'rice', 'sandwich',
     'suggest a meal', 'suggest something to eat', 'what should i eat',
-    'what to eat', 'recommend a meal', 'what can i cook',
+    'what to eat', 'recommend a meal', 'what can i cook', 'eat', 'food',
+    'cook', 'prepare', 'diet', 'nutrition', 'calories', 'carbs', 'fat', 'protein'
   ];
   for (const kw of FOOD_KEYWORDS_TR) if (q.includes(kw)) return true;
   for (const kw of FOOD_KEYWORDS_EN) if (q.includes(kw)) return true;
@@ -586,11 +590,11 @@ function compactGuidance(locale: Locale, foodIntent: boolean = false): string {
       '  • Makro/kalori sorusu → sayısal, kısa.',
       '- Wellness DNA: alerji/sevmediği yiyecekleri ASLA önerme. Low-carb kullanıcıda yüksek karbonhidratlı malzemeleri öneri olarak değil, sadece "kaçın/sınırla" çerçevesinde an.',
       '- Tıbbi tanı/tedavi iddiası YOK. Doktor/diyetisyen yerine geçme.',
-      '- Cevap TÜRKÇE olsun, karışık dil olmasın. ≤ 180 kelime, en fazla 1-2 emoji. Her cevabı soruyla bitirme.',
+      '- Cevap TÜRKÇE olsun, karışık dil olmasın. ≤ 180 kelime, en fazla 1-2 emoji. Her cevabı soruyla bitirme. KULLANICI TÜRKÇE YAZDIYSA KESİNLİKLE BÜTÜN CEVAP TÜRKÇE OLMALIDIR. İNGİLİZCE KELİME KULLANMA.',
     ];
     if (foodIntent) {
       lines.unshift(
-        'YEMEK-ÖNCE MODU AKTİF: kullanıcı yemek/tarif/öğün/tavuk vb. istiyor. ÖNCE somut bir tarif/öneri ver (yemek adı + porsiyonlu malzemeler + 2-4 adım + kaba kcal). Genel "protein şu kadar olmalı" dersi VERME. Açıklama gerekiyorsa tarifi verdikten SONRA 1-2 cümle.',
+        'YEMEK-ÖNCE MODU AKTİF: kullanıcı yemek/tarif/öğün/tavuk vb. istiyor. ÖNCE somut bir tarif/öneri ver (yemek adı + porsiyonlu malzemeler + 2-4 adım + kaba kcal). Genel "protein şu kadar olmalı" dersi VERME. Açıklama gerekiyorsa tarifi verdikten SONRA 1-2 cümle. KULLANICIYA GENEL BESLENME TAVSİYESİ VERME, DOĞRUDAN SOMUT YEMEK VEYA TARİF ÖNER.',
       );
     }
     return lines.join('\n');
@@ -613,10 +617,23 @@ function compactGuidance(locale: Locale, foodIntent: boolean = false): string {
   ];
   if (foodIntent) {
     lines.unshift(
-      'FOOD-FIRST MODE ON: the user is asking for a meal/recipe/snack/specific food. Lead with a CONCRETE recipe/suggestion (dish name + portioned ingredients + 2-4 steps + rough kcal). Do NOT open with a generic "protein should be X" lecture. If explanation is needed, put it AFTER the recipe in 1-2 sentences.',
+      'FOOD-FIRST MODE ON: the user is asking for a meal/recipe/snack/specific food. Lead with a CONCRETE recipe/suggestion (dish name + portioned ingredients + 2-4 steps + rough kcal). Do NOT open with a generic "protein should be X" lecture. If explanation is needed, put it AFTER the recipe in 1-2 sentences. DO NOT GIVE GENERIC NUTRITIONAL ADVICE, GIVE A CONCRETE RECIPE.',
     );
   }
   return lines.join('\n');
+}
+
+function isTurkishMessage(text: string): boolean {
+  const q = text.toLowerCase();
+  if (/[çğışöüı]/i.test(q)) return true;
+  
+  const commonTrWords = [
+    'yemek', 'tarif', 'tavuk', 'et', 'balık', 'salata', 'çorba', 'makarna', 
+    'pilav', 'öner', 'ver', 'yiyebilirim', 'yiyeyim', 'ye', 'olsun', 'ne', 
+    'neler', 'tavsiye', 'sabah', 'öğle', 'akşam', 'kahvaltı', 'ara', 'öğün', 
+    'besin', 'kalori', 'protein', 'karbonhidrat', 'yağ'
+  ];
+  return commonTrWords.some(word => new RegExp(`\\b${word}\\b`, 'i').test(q));
 }
 
 /**
@@ -644,18 +661,22 @@ export function buildMiraQuestion(params: {
   repairViolations?: string[];
 }): string {
   const { userQuestion, locale, dna, stats, recentSuggestions, repairViolations } = params;
-  const ctx = summarizeWellnessDNA(dna, locale);
+  
+  // Strengthen Turkish language locking
+  const activeLocale = isTurkishMessage(userQuestion) ? 'tr' : locale;
+  
+  const ctx = summarizeWellnessDNA(dna, activeLocale);
   const excluded = excludedFoodsFromDNA(dna);
   const statsLine = stats && (stats.caloriesConsumed != null || stats.caloriesTarget != null)
-    ? (locale === 'tr' ? 'Bugün: ' : 'Today: ') +
+    ? (activeLocale === 'tr' ? 'Bugün: ' : 'Today: ') +
       [
         stats.caloriesConsumed != null && stats.caloriesTarget != null
           ? `${stats.caloriesConsumed}/${stats.caloriesTarget} kcal`
           : stats.caloriesConsumed != null
             ? `${stats.caloriesConsumed} kcal`
             : null,
-        stats.waterGlasses != null ? `${stats.waterGlasses} ${locale === 'tr' ? 'bardak su' : 'glasses water'}` : null,
-        stats.exerciseMinutes != null ? `${stats.exerciseMinutes} ${locale === 'tr' ? 'dk egzersiz' : 'min exercise'}` : null,
+        stats.waterGlasses != null ? `${stats.waterGlasses} ${activeLocale === 'tr' ? 'bardak su' : 'glasses water'}` : null,
+        stats.exerciseMinutes != null ? `${stats.exerciseMinutes} ${activeLocale === 'tr' ? 'dk egzersiz' : 'min exercise'}` : null,
       ]
         .filter(Boolean)
         .join(', ')
@@ -666,16 +687,16 @@ export function buildMiraQuestion(params: {
 
   // --- 2) Compact context block AFTER the question. ---
   blockLines.push('');
-  blockLines.push(locale === 'tr' ? '[BAĞLAM]' : '[CONTEXT]');
-  blockLines.push(`Locale: ${locale.toUpperCase()}`);
-  blockLines.push((locale === 'tr' ? 'Kullanıcı: ' : 'User: ') + ctx);
+  blockLines.push(activeLocale === 'tr' ? '[BAĞLAM]' : '[CONTEXT]');
+  blockLines.push(`Locale: ${activeLocale.toUpperCase()}`);
+  blockLines.push((activeLocale === 'tr' ? 'Kullanıcı: ' : 'User: ') + ctx);
   if (statsLine) blockLines.push(statsLine);
 
   // Hard exclusions — compact, one line.
   if (excluded.length > 0) {
     const exList = excluded.join(', ');
     blockLines.push(
-      locale === 'tr'
+      activeLocale === 'tr'
         ? `Yasaklı (alerji/sevmediği): ${exList}. Bu yiyecekleri ASLA önerme veya adıyla anma.`
         : `Forbidden (allergies/dislikes): ${exList}. Never suggest or name these.`,
     );
@@ -685,7 +706,7 @@ export function buildMiraQuestion(params: {
   if (recentSuggestions && recentSuggestions.length > 0) {
     const list = recentSuggestions.slice(-3).join(' | ');
     blockLines.push(
-      locale === 'tr'
+      activeLocale === 'tr'
         ? `Son öneriler (tekrar etme): ${list}.`
         : `Recent suggestions (do not repeat): ${list}.`,
     );
@@ -695,7 +716,7 @@ export function buildMiraQuestion(params: {
   if (repairViolations && repairViolations.length > 0) {
     const viol = repairViolations.join(', ');
     blockLines.push(
-      locale === 'tr'
+      activeLocale === 'tr'
         ? `ÖNCEKİ YANITI DÜZELT: yasaklı (${viol}) geçti. Tamamen farklı bir öneri ver, bu yiyecekleri kullanma.`
         : `REPAIR PREVIOUS ANSWER: it included forbidden (${viol}). Give a fully different answer without those foods.`,
     );
@@ -703,7 +724,26 @@ export function buildMiraQuestion(params: {
 
   // --- 3) Minimal intent-aware guidance — short, after the question. ---
   blockLines.push('');
-  blockLines.push(compactGuidance(locale, detectFoodIntent(userQuestion)));
+  blockLines.push(compactGuidance(activeLocale, detectFoodIntent(userQuestion)));
+
+  // --- 4) Special Chicken / Food Intent Trigger Override ---
+  const q = userQuestion.toLowerCase().trim();
+  const hasChickenTrigger = 
+    q.includes("tavuk olsun") || 
+    q.includes("yemek öner") || 
+    q.includes("yemek oner") || 
+    q.includes("tarif ver") || 
+    q.includes("ne yiyebilirim");
+
+  if (hasChickenTrigger) {
+    blockLines.push('');
+    blockLines.push(activeLocale === 'tr' ? '[ÖZEL TALİMAT]' : '[SPECIAL INSTRUCTION]');
+    blockLines.push(
+      activeLocale === 'tr'
+        ? 'Kullanıcı "tavuk olsun", "yemek öner", "tarif ver" veya "ne yiyebilirim" dedi. Bu nedenle KESİNLİKLE ve SADECE somut bir TAVUK YEMEĞİ VEYA TARİFİ (tavuk içeren) önermelisin. Bu öneri mutlaka porsiyonlu malzemeleri, yapılış adımlarını, kalori/makro değerlerini ve sadece bir kısa takip sorusunu içermelidir. Genel tavsiyeler verme, doğrudan tarife geç. Yanıtın tamamı sadece Türkçe olmalıdır.'
+        : 'The user used a specific food trigger ("tavuk olsun", "yemek öner", "tarif ver", "ne yiyebilirim"). You must return a concrete CHICKEN meal or recipe featuring chicken, including portioned ingredients, step-by-step instructions, calories/macros, and one short follow-up question. Do not provide general advice, give the recipe directly. The reply must be fully in Turkish if the active locale is Turkish.'
+    );
+  }
 
   return blockLines.join('\n');
 }

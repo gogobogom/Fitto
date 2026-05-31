@@ -31,7 +31,7 @@ import {
   type MiraProfilePayload,
 } from '@/lib/miraPrompt';
 
-const MIRA_ENDPOINT = 'https://ohara-ai-backend-production.up.railway.app/chat';
+const MIRA_ENDPOINT = process.env.NEXT_PUBLIC_MIRA_ENDPOINT || 'https://ohara-ai-backend-production.up.railway.app/chat';
 const REQUEST_TIMEOUT_MS = 20_000;
 
 interface MiraResponse {

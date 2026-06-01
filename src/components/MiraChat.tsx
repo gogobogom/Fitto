@@ -255,11 +255,17 @@ export function MiraChat() {
         const excluded = excludedFoodsFromDNA(dna);
         const profile = buildMiraProfilePayload(dna, lang);
 
+        const chatHistory = messages.slice(-5).map((m) => ({
+          role: m.role === 'user' ? ('user' as const) : ('assistant' as const),
+          text: m.text,
+        }));
+
         const firstWrapped = buildMiraQuestion({
           userQuestion: question,
           locale: lang,
           dna,
           recentSuggestions,
+          chatHistory,
         });
         let answer = await askMira(firstWrapped, controller.signal, lang, profile);
 
@@ -274,6 +280,7 @@ export function MiraChat() {
             dna,
             recentSuggestions,
             repairViolations: hits,
+            chatHistory,
           });
           answer = await askMira(repairWrapped, controller.signal, lang, profile);
           hits = findExcludedHits(answer, excluded);

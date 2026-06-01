@@ -580,7 +580,7 @@ function compactGuidance(locale: Locale, foodIntent: boolean = false): string {
       'YANIT KURALLARI (kısa):',
       "- Sen Mira'sın: sıcak, kararlı, pratik bir wellness koçu. Açılış selamı verme, yansıtma yapma, klişe doldurma yapma.",
       '- Cevabı kullanıcının niyetine göre seç:',
-      '  • Yemek/tarif/atıştırmalık/öğün isteği → somut yemek adı, miktarlı malzemeler, 2-4 adım, kabaca kalori + protein/karb/yağ, gerekirse 1 akıllı değişim. DNA alerji/sevmediklerini ASLA kullanma. Sadece protein/makro dersi VERME.',
+      '  • Yemek/tarif/atıştırmalık/öğün isteği → somut yemek adı, miktarlı malzemeler, 2-4 adım, kabaca kalori + protein/karb/yağ, gerekirse 1 akıllı değişim. DNA alerji/sevmediklerini ASLA kullanma. Sadece protein/makro dersi VERME. Genel beslenme eğitimi/bilgisi verme, öncelikle somut bir yemek veya tarif sun.',
       "  • Tek malzeme/kısıt belirtilirse (örn. 'tavuk olsun', 'mercimek olsun') → o malzemeyi içeren SOMUT bir tarif ver. Genel besin değeri açıklaması yapma.",
       "  • 'bana bir öğün öner' / 'ne yiyeyim' gibi açık ama yönsüz istek → 2-3 SOMUT öğün seçeneği (her biri 1 satır + kaba kcal). Protein dersi verme.",
       "  • 'yemek tarifi neden vermiyorsun?' / 'tarif versene' → kısa onayla (1 cümle) sonra DOĞRUDAN 1 somut tarif ver. Bahane uzatma.",
@@ -588,7 +588,7 @@ function compactGuidance(locale: Locale, foodIntent: boolean = false): string {
       '  • Bilgi / "neden" / açıklama → MASTER_VERI bilgisini kullanarak net ve kısa açıkla; gereksiz tarif önerme.',
       "  • Aşırı yedikten sonra ne yapmalı → AÇ KALMAYI ÖNERME. Toparlanma rehberliği ver: bol su, hafif protein+sebze, yürüyüş, ertesi günü normal yemek.",
       '  • Makro/kalori sorusu → sayısal, kısa.',
-      '- Wellness DNA: alerji/sevmediği yiyecekleri ASLA önerme. Low-carb kullanıcıda yüksek karbonhidratlı malzemeleri öneri olarak değil, sadece "kaçın/sınırla" çerçevesinde an.',
+      '- Wellness DNA: Alerji/sevmediği yiyecekleri ASLA önerme. Kullanıcı low-carb, düşük karbonhidrat veya keto besleniyorsa yüksek karbonhidratlı malzemeleri ASLA önerme: pilav, makarna, ekmek, patates, bal, şeker, granola, yulaf, muz, üzüm, hurma. Bu malzemeleri yalnızca kaçınılması/sınırlandırılması gerekenler olarak an. Düşük karbonhidratlı yemeklerden kaçınma; tam tersine düşük karbonhidratlı yemek öner.',
       '- Tıbbi tanı/tedavi iddiası YOK. Doktor/diyetisyen yerine geçme.',
       '- Cevap TÜRKÇE olsun, karışık dil olmasın. ≤ 180 kelime, en fazla 1-2 emoji. Her cevabı soruyla bitirme. KULLANICI TÜRKÇE YAZDIYSA KESİNLİKLE BÜTÜN CEVAP TÜRKÇE OLMALIDIR. İNGİLİZCE KELİME KULLANMA.',
     ];
@@ -603,7 +603,7 @@ function compactGuidance(locale: Locale, foodIntent: boolean = false): string {
     'REPLY RULES (short):',
     "- You are Mira: warm, decisive, practical wellness coach. No opening greeting, no mirroring, no filler.",
     "- Pick the mode by user intent:",
-    '  • Food/recipe/snack/meal request → concrete dish name, portioned ingredients, 2-4 steps, rough kcal + protein/carb/fat, one smart swap if useful. Never use DNA allergies/dislikes. Do NOT default to a protein/macro lecture.',
+    '  • Food/recipe/snack/meal request → concrete dish name, portioned ingredients, 2-4 steps, rough kcal + protein/carb/fat, one smart swap if useful. Never use DNA allergies/dislikes. Do NOT default to a protein/macro lecture. Do NOT give generic nutrition education; give a concrete meal or recipe first.',
     "  • Single-ingredient constraint (e.g. 'make it chicken', 'with lentils') → give a CONCRETE recipe featuring that ingredient. No general nutrient explanation.",
     "  • 'suggest a meal' / 'what should I eat' / open-ended but pointed → 2-3 CONCRETE meal options (1 line each + rough kcal). No protein lecture.",
     "  • 'why aren't you giving a recipe?' / 'just give me a recipe' → briefly acknowledge (1 sentence), then DIRECTLY give a concrete recipe. No long apology.",
@@ -611,7 +611,7 @@ function compactGuidance(locale: Locale, foodIntent: boolean = false): string {
     '  • Explanation / "why" question → answer clearly using MASTER_VERI knowledge; do NOT push a recipe.',
     '  • After overeating → DO NOT tell them to starve. Give recovery guidance: hydrate, light protein+veg, walk, eat normally the next day.',
     '  • Macros/calories → numeric, brief.',
-    '- Wellness DNA: never suggest allergies/disliked foods. For low-carb users, frame high-carb items as "avoid/limit", not as suggestions.',
+    '- Wellness DNA: Never suggest allergies/disliked foods. If the user is low-carb, low-carbohydrate, or keto, NEVER suggest high-carbohydrate ingredients: rice, pasta, bread, potatoes, honey, sugar, granola, oats, bananas, grapes, dates. Only mention these ingredients as things to avoid/limit. Do not avoid low-carbohydrate meals; on the contrary, suggest low-carbohydrate meals.',
     '- No medical diagnosis/treatment claims. Do not replace a doctor / dietitian.',
     "- Reply in the user's language, no mixing. ≤ 180 words, at most 1-2 emojis. Do not end every reply with a question.",
   ];
@@ -659,8 +659,9 @@ export function buildMiraQuestion(params: {
   stats?: DailyStatsSnapshot;
   recentSuggestions?: string[];
   repairViolations?: string[];
+  chatHistory?: Array<{ role: 'user' | 'assistant'; text: string }>;
 }): string {
-  const { userQuestion, locale, dna, stats, recentSuggestions, repairViolations } = params;
+  const { userQuestion, locale, dna, stats, recentSuggestions, repairViolations, chatHistory } = params;
   
   // Strengthen Turkish language locking
   const activeLocale = isTurkishMessage(userQuestion) ? 'tr' : locale;
@@ -722,6 +723,21 @@ export function buildMiraQuestion(params: {
     );
   }
 
+  // --- 2.5) Recent Chat History block (optional) ---
+  if (chatHistory && chatHistory.length > 0) {
+    blockLines.push('');
+    blockLines.push(activeLocale === 'tr' ? '[SON KONUŞMA GEÇMİŞİ]' : '[RECENT CHAT HISTORY]');
+    chatHistory.slice(-5).forEach((msg) => {
+      const sender = msg.role === 'user' ? (activeLocale === 'tr' ? 'Kullanıcı' : 'User') : 'Mira';
+      blockLines.push(`${sender}: ${msg.text}`);
+    });
+    blockLines.push(
+      activeLocale === 'tr'
+        ? 'DİKKAT: Son konuşma geçmişindeki aynı yemek tarifini, malzemeleri veya açıklamaları kesinlikle TEKRARLAMA, bunlardan tamamen farklı bir yanıt ver.'
+        : 'ATTENTION: Do NOT repeat the same recipe, ingredients, or explanation from the recent chat history; give a completely different response.'
+    );
+  }
+
   // --- 3) Minimal intent-aware guidance — short, after the question. ---
   blockLines.push('');
   blockLines.push(compactGuidance(activeLocale, detectFoodIntent(userQuestion)));
@@ -742,6 +758,33 @@ export function buildMiraQuestion(params: {
       activeLocale === 'tr'
         ? 'Kullanıcı "tavuk olsun", "yemek öner", "tarif ver" veya "ne yiyebilirim" dedi. Bu nedenle KESİNLİKLE ve SADECE somut bir TAVUK YEMEĞİ VEYA TARİFİ (tavuk içeren) önermelisin. Bu öneri mutlaka porsiyonlu malzemeleri, yapılış adımlarını, kalori/makro değerlerini ve sadece bir kısa takip sorusunu içermelidir. Genel tavsiyeler verme, doğrudan tarife geç. Yanıtın tamamı sadece Türkçe olmalıdır.'
         : 'The user used a specific food trigger ("tavuk olsun", "yemek öner", "tarif ver", "ne yiyebilirim"). You must return a concrete CHICKEN meal or recipe featuring chicken, including portioned ingredients, step-by-step instructions, calories/macros, and one short follow-up question. Do not provide general advice, give the recipe directly. The reply must be fully in Turkish if the active locale is Turkish.'
+    );
+  }
+
+  // --- 5) Special Recipe Repetition / Complaint handling ---
+  const userComplaint = 
+    q.includes("ayni yemek") ||
+    q.includes("aynı yemek") ||
+    q.includes("hep ayni") ||
+    q.includes("hep aynı") ||
+    q.includes("farkli tarif") ||
+    q.includes("farklı tarif") ||
+    q.includes("baska tarif") ||
+    q.includes("başka tarif") ||
+    q.includes("tekrar ediyorsun") ||
+    q.includes("ayni tarif") ||
+    q.includes("aynı tarif") ||
+    q.includes("same recipe") ||
+    q.includes("different recipe") ||
+    q.includes("you keep repeating");
+
+  if (userComplaint) {
+    blockLines.push('');
+    blockLines.push(activeLocale === 'tr' ? '[ÖZEL TEKRAR ŞİKAYETİ TALİMATI]' : '[SPECIAL REPETITION COMPLAINT INSTRUCTION]');
+    blockLines.push(
+      activeLocale === 'tr'
+        ? 'Kullanıcı aynı yemeği/tarifi tekrar etmenden şikayet etti veya farklı bir tarif istiyor. Bu nedenle KESİNLİKLE şunları yapmalısın:\n1. Kısa bir cümleyle özür dile.\n2. Son konuşmadaki yemek kategorisinden ve malzemelerinden tamamen kaçın.\n3. Net bir şekilde farklı olan yeni ve somut bir yemek tarifi ver.\n4. Tarifte gram cinsinden porsiyonları, 2-4 adımda yapılışını ve kalori + makro (protein/karb/yağ) değerlerini belirt.\n5. Sadece bir tane kısa takip sorusu sor.'
+        : 'The user complained about receiving the same recipe/meal or is asking for a different recipe. You MUST:\n1. Apologize in one short sentence.\n2. Avoid the previous recipe category and ingredients entirely.\n3. Give a clearly different concrete recipe.\n4. Include grams, 2-4 preparation steps, and kcal/protein/carbs/fat values.\n5. Ask exactly one short follow-up question.'
     );
   }
 
